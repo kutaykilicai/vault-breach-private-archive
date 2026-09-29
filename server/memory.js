@@ -214,7 +214,8 @@ function graph(maxNodes = 1500) {
 
 function stats() {
   const { root, notes } = build();
-  return { root, notes: notes.length, folders: [...new Set(notes.map((n) => n.folder).filter(Boolean))].slice(0, 20) };
+  const configured = config.get().vaultPath || '';
+  return { root, configured, missing: Boolean(configured && !root), notes: notes.length, folders: [...new Set(notes.map((n) => n.folder).filter(Boolean))].slice(0, 20) };
 }
 
 function listSkills() {

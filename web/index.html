@@ -82,6 +82,7 @@
 
       <div id="chat" class="chat"></div>
 
+      <div id="attachList" class="attach-list" hidden></div>
       <form id="composer" class="composer">
         <select id="tierSel" title="Yönlendirme katmanı">
           <option value="">AUTO</option>
@@ -90,6 +91,8 @@
           <option value="3">T3 · ajan</option>
         </select>
         <textarea id="input" rows="1" placeholder="Bir şey söyle ya da yaz…  (Enter gönder · Shift+Enter satır · Ctrl+Alt+J mikrofon)"></textarea>
+        <button type="button" class="icon-btn" id="attachBtn" title="Dosya ekle (sürükle-bırak veya Ctrl+V de olur)">📎</button>
+        <input type="file" id="fileInput" multiple hidden />
         <button type="button" class="icon-btn" id="micBtn" title="Sesle konuş (Ctrl+Alt+J)">🎙</button>
         <button type="submit" class="send-btn" id="sendBtn">Gönder</button>
       </form>

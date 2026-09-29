@@ -181,7 +181,8 @@ const TOOLS = [
     description: 'Bir programı, dosyayı, klasörü veya web adresini varsayılan uygulamayla açar (örn: "notepad", "https://x.com", "C:\\\\Users").',
     parameters: { type: 'object', properties: { target: { type: 'string' } }, required: ['target'] },
     run: async ({ target }) => {
-      if (isWin) execFile('cmd.exe', ['/c', 'start', '', target], { windowsHide: true });
+      // cmd, tırnak dışındaki & | < > karakterlerini komut ayırıcı sayar; hedef her zaman tırnak içinde gitmeli.
+      if (isWin) execFile('cmd.exe', ['/d', '/c', `start "" "${String(target).replace(/"/g, '')}"`], { windowsHide: true, windowsVerbatimArguments: true });
       else execFile(process.platform === 'darwin' ? 'open' : 'xdg-open', [target]);
       return `Açılıyor: ${target}`;
     },

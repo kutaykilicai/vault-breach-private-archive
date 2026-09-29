@@ -12,6 +12,7 @@
   let rgb = '58, 160, 255';
   let highlighted = new Map();
   let lastFrame = 0;
+  let small = false;
 
   function resize() {
     dpr = Math.min(window.devicePixelRatio || 1, 2);
@@ -40,13 +41,44 @@
     return out;
   }
 
+  // Az bağlantılı küçük vault'larda notlar klasör merkezlerine bağlanır; yoksa ağ görünmez.
+  function withFolderHubs(data) {
+    const out = { nodes: data.nodes.map((n) => ({ ...n })), links: data.links.map((l) => [...l]) };
+    const hubIndex = new Map();
+    const hub = (key, title) => {
+      if (!hubIndex.has(key)) {
+        hubIndex.set(key, out.nodes.length);
+        out.nodes.push({ id: `hub:${key}`, title, degree: 0, hub: true });
+      }
+      return hubIndex.get(key);
+    };
+    const root = hub('', 'VAULT');
+    data.nodes.forEach((n, i) => {
+      const parts = String(n.id).split('/');
+      if (parts.length < 2) return out.links.push([i, root]);
+      const f = hub(parts[0], `${parts[0]}/`);
+      out.links.push([i, f]);
+    });
+    for (const [key, i] of hubIndex) if (key) out.links.push([i, root]);
+    for (const n of out.nodes) n.degree = 0;
+    for (const [a, b] of out.links) {
+      out.nodes[a].degree++;
+      out.nodes[b].degree++;
+    }
+    return out;
+  }
+
   function load(data) {
-    if (!data || !data.nodes || !data.nodes.length) data = demoData();
+    const real = Boolean(data && data.nodes && data.nodes.length);
+    if (!real) data = demoData();
+    else if (data.links.length < data.nodes.length) data = withFolderHubs(data);
+    small = real && data.nodes.length <= 80;
     const spread = Math.sqrt(data.nodes.length) * 22;
     nodes = data.nodes.map((n) => {
       const a = Math.random() * Math.PI * 2;
       const r = Math.sqrt(Math.random()) * spread;
-      return { ...n, x: Math.cos(a) * r, y: Math.sin(a) * r, vx: 0, vy: 0, size: 1.1 + Math.sqrt(n.degree || 0) * 0.9 };
+      const size = small ? (n.hub ? 4.5 : 3) + Math.sqrt(n.degree || 0) * 1.2 : 1.1 + Math.sqrt(n.degree || 0) * 0.9;
+      return { ...n, x: Math.cos(a) * r, y: Math.sin(a) * r, vx: 0, vy: 0, size };
     });
     links = data.links.filter(([a, b]) => nodes[a] && nodes[b]);
     alpha = 1;
@@ -120,7 +152,7 @@
     else if (Math.floor(now / 33) % 3 === 0) tick();
     angle += 0.0006;
 
-    let maxR = 260;
+    let maxR = small ? 90 : 260;
     for (const n of nodes) maxR = Math.max(maxR, Math.abs(n.x), Math.abs(n.y));
     const scale = (Math.min(W, H) * 0.46) / maxR;
     const cos = Math.cos(angle);
@@ -132,7 +164,7 @@
 
     ctx.clearRect(0, 0, W, H);
     ctx.lineWidth = 0.6;
-    ctx.strokeStyle = `rgba(${rgb}, 0.09)`;
+    ctx.strokeStyle = `rgba(${rgb}, ${small ? 0.22 : 0.09})`;
     ctx.beginPath();
     for (const [a, b] of links) {
       ctx.moveTo(px(nodes[a]), py(nodes[a]));
@@ -147,8 +179,13 @@
       const hi = highlighted.has(n.id);
       ctx.beginPath();
       ctx.arc(x, y, hi ? n.size + 3 + pulse * 2 : n.size, 0, Math.PI * 2);
-      ctx.fillStyle = hi ? `rgba(${rgb}, 0.95)` : `rgba(${rgb}, ${0.25 + Math.min(n.degree, 20) * 0.025})`;
+      ctx.fillStyle = hi ? `rgba(${rgb}, 0.95)` : `rgba(${rgb}, ${(small ? 0.5 : 0.25) + Math.min(n.degree, 20) * 0.025})`;
       ctx.fill();
+      if (small && !hi) {
+        ctx.font = n.hub ? '11px Consolas, monospace' : '10px Consolas, monospace';
+        ctx.fillStyle = `rgba(${rgb}, ${n.hub ? 0.75 : 0.5})`;
+        ctx.fillText(n.title, x + n.size + 4, y + 3);
+      }
       if (hi) {
         ctx.beginPath();
         ctx.arc(x, y, 14 + pulse * 6, 0, Math.PI * 2);

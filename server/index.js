@@ -9,6 +9,8 @@ const bridge = require('./bridge');
 const { detectAll } = require('./detect');
 
 const WEB = path.join(config.ROOT, 'web');
+const UPLOADS = path.join(config.ROOT, 'data', 'uploads');
+const MAX_UPLOAD = 25 * 1024 * 1024;
 const HOST = '127.0.0.1';
 const MIME = {
   '.html': 'text/html; charset=utf-8',
@@ -31,7 +33,7 @@ function readBody(req) {
     let data = '';
     req.on('data', (c) => {
       data += c;
-      if (data.length > 20 * 1024 * 1024) reject(new Error('İstek çok büyük'));
+      if (data.length > 40 * 1024 * 1024) reject(new Error('İstek çok büyük'));
     });
     req.on('end', () => {
       try {
@@ -130,7 +132,20 @@ async function route(req, res) {
   if (p === '/api/config' && req.method === 'POST') {
     config.updateFromClient(await readBody(req));
     memory.build(true);
+    bridge.broadcast('config_changed', { at: Date.now() });
     return sendJson(res, 200, config.masked());
+  }
+  if (p === '/api/upload' && req.method === 'POST') {
+    const { name, data } = await readBody(req);
+    if (!name || typeof data !== 'string') return sendJson(res, 400, { error: 'name ve data gerekli' });
+    const buf = Buffer.from(data, 'base64');
+    if (buf.length > MAX_UPLOAD) return sendJson(res, 413, { error: `Dosya çok büyük (en fazla ${MAX_UPLOAD / 1024 / 1024} MB)` });
+    const safe = path.basename(String(name)).replace(/[<>:"/\\|?*\x00-\x1f]/g, '_').slice(0, 120) || 'dosya';
+    const stamp = new Date().toISOString().replace(/[-:]/g, '').replace('T', '-').slice(0, 15);
+    fs.mkdirSync(UPLOADS, { recursive: true });
+    const file = path.join(UPLOADS, `${stamp}-${safe}`);
+    fs.writeFileSync(file, buf);
+    return sendJson(res, 200, { path: file, size: buf.length });
   }
   if (p === '/api/models' && req.method === 'GET') {
     try {

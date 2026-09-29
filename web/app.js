@@ -28,7 +28,12 @@
   // ---------- yardımcılar ----------
   function saveHistories() {
     for (const k of Object.keys(histories)) histories[k] = histories[k].slice(-200);
-    localStorage.setItem('vb.histories', JSON.stringify(histories));
+    try {
+      localStorage.setItem('vb.histories', JSON.stringify(histories));
+    } catch {
+      for (const k of Object.keys(histories)) histories[k] = histories[k].slice(-40);
+      try { localStorage.setItem('vb.histories', JSON.stringify(histories)); } catch { /* depolama dolu */ }
+    }
   }
 
   function accentRgb() {
@@ -213,7 +218,7 @@
     const cards = new Map();
     for (const m of h) {
       if (m.role === 'user') {
-        chat.appendChild(userBubble(m.display || m.content, m.from));
+        chat.appendChild(userBubble(m.display || m.content, m.from, m.atts));
       } else if (m.role === 'assistant') {
         if (m.content) {
           const b = botBubble();
@@ -238,13 +243,37 @@
   // ---------- gönderme / akış ----------
   async function send(text, { tier, display, bridge } = {}) {
     text = text.trim();
-    if (!text || busy) return;
+    const files = bridge ? [] : attachments.splice(0);
+    if ((!text && !files.length) || busy) {
+      attachments.unshift(...files);
+      return;
+    }
+    renderAttachments();
+    let atts = null;
+    if (files.length) {
+      $('#sendBtn').textContent = 'Yükleniyor…';
+      try {
+        atts = await Promise.all(files.map(uploadAttachment));
+      } catch (e) {
+        activity(`dosya yüklenemedi: ${esc(e.message)}`, '!');
+        attachments.unshift(...files);
+        renderAttachments();
+        $('#sendBtn').textContent = 'Gönder';
+        return;
+      }
+      $('#sendBtn').textContent = 'Gönder';
+      if (!text) text = atts.length > 1 ? 'Ekteki dosyalara bak.' : 'Ekteki dosyaya bak.';
+      display = display || text;
+      text += attachmentBlock(atts);
+      if (!tier && !$('#tierSel').value && atts.some((a) => a.inline == null)) tier = '3';
+    }
     const h = histories[mode];
     const sendMode = mode;
-    h.push({ role: 'user', content: text, ...(display ? { display } : {}), ...(bridge ? { from: bridge.label } : {}) });
+    const attNames = atts?.map((a) => a.name);
+    h.push({ role: 'user', content: text, ...(display ? { display } : {}), ...(bridge ? { from: bridge.label } : {}), ...(attNames ? { atts: attNames } : {}) });
     saveHistories();
     document.body.classList.add('has-chat');
-    chat.appendChild(userBubble(display || text, bridge?.label));
+    chat.appendChild(userBubble(display || text, bridge?.label, attNames));
     scrollDown();
     input.value = '';
     autoGrow();
@@ -359,7 +388,7 @@
       const res = await fetch('/api/chat', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ mode: sendMode, tier: tier ?? $('#tierSel').value, messages: h.filter((m) => m.role !== 'error').map(({ display, from, ...m }) => m) }),
+        body: JSON.stringify({ mode: sendMode, tier: tier ?? $('#tierSel').value, messages: h.filter((m) => m.role !== 'error').map(({ display, from, atts, ...m }) => m) }),
         signal: controller.signal,
       });
       const reader = res.body.getReader();
@@ -407,11 +436,90 @@
   // ---------- dış ajan köprüsü (Grok Bot) ----------
   const bridgeQueue = [];
 
-  function userBubble(text, from) {
+  function userBubble(text, from, atts) {
     const b = el('div', `msg user${from ? ' ext' : ''}`);
     if (from) b.appendChild(el('div', 'from', `⇄ ${esc(from)}`));
     b.appendChild(document.createTextNode(text));
+    if (atts?.length) b.appendChild(el('div', 'atts', `📎 ${atts.map(esc).join(' · ')}`));
     return b;
+  }
+
+  // ---------- dosya ekleri ----------
+  const attachments = [];
+  const INLINE_MAX = 120 * 1024;
+  const TEXT_EXT = /\.(txt|md|markdown|csv|tsv|json|jsonl|xml|html?|css|js|mjs|cjs|ts|tsx|jsx|py|ps1|psm1|bat|cmd|sh|c|h|cpp|hpp|cs|java|kt|go|rs|rb|php|sql|yaml|yml|toml|ini|cfg|conf|log|env\.example|srt|vtt|tex)$/i;
+  const fmtSize = (n) => (n < 1024 ? `${n} B` : n < 1048576 ? `${(n / 1024).toFixed(0)} KB` : `${(n / 1048576).toFixed(1)} MB`);
+
+  function addFiles(list) {
+    for (const f of list) {
+      if (f.size > 25 * 1024 * 1024) {
+        activity(`${esc(f.name)}: 25 MB sınırını aşıyor`, '!');
+        continue;
+      }
+      if (attachments.length >= 10) {
+        activity('en fazla 10 dosya eklenebilir', '!');
+        break;
+      }
+      attachments.push(f);
+    }
+    renderAttachments();
+  }
+
+  function renderAttachments() {
+    const box = $('#attachList');
+    box.innerHTML = '';
+    box.hidden = !attachments.length;
+    attachments.forEach((f, i) => {
+      const c = el('div', 'att', `<b title="${esc(f.name)}">${esc(f.name)}</b><span>${fmtSize(f.size)}</span>`);
+      const x = el('button', '', '×');
+      x.type = 'button';
+      x.title = 'Kaldır';
+      x.onclick = () => {
+        attachments.splice(i, 1);
+        renderAttachments();
+      };
+      c.appendChild(x);
+      box.appendChild(c);
+    });
+  }
+
+  function readAs(file, kind) {
+    return new Promise((resolve, reject) => {
+      const r = new FileReader();
+      r.onload = () => resolve(r.result);
+      r.onerror = () => reject(r.error || new Error('okunamadı'));
+      kind === 'text' ? r.readAsText(file) : r.readAsDataURL(file);
+    });
+  }
+
+  async function uploadAttachment(file) {
+    const dataUrl = await readAs(file, 'data');
+    const res = await fetch('/api/upload', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ name: file.name, data: String(dataUrl).split(',')[1] || '' }),
+    });
+    const r = await res.json();
+    if (!res.ok) throw new Error(r.error || `HTTP ${res.status}`);
+    let inline = null;
+    if ((file.type.startsWith('text/') || TEXT_EXT.test(file.name) || /json|xml|javascript/.test(file.type)) && file.size <= INLINE_MAX) {
+      const t = await readAs(file, 'text');
+      if (!/\u0000/.test(t)) inline = t;
+    }
+    return { name: file.name, path: r.path, size: file.size, inline };
+  }
+
+  function attachmentBlock(atts) {
+    let s = '\n\n📎 EKLER — kullanıcı bu dosyaları ekledi (bilgisayarda kayıtlı yolları ile):';
+    for (const a of atts) {
+      if (a.inline != null) {
+        const fence = a.inline.includes('```') ? '````' : '```';
+        s += `\n\n### ${a.name} (${fmtSize(a.size)}) — ${a.path}\n${fence}\n${a.inline}\n${fence}`;
+      } else {
+        s += `\n\n### ${a.name} (${fmtSize(a.size)}) — ${a.path}\n(İçerik metin olarak eklenmedi. Gerekirse read_file veya run_command araçlarıyla bu yoldan oku/işle.)`;
+      }
+    }
+    return s;
   }
 
   function processBridgeQueue() {
@@ -428,6 +536,12 @@
       activity(`<b>${esc(m.label)}</b> mesaj gönderdi`, '⇄');
       bridgeQueue.push(m);
       processBridgeQueue();
+    });
+    es.addEventListener('config_changed', async () => {
+      if (savingSettings) return;
+      await refreshStatus(false).catch(() => {});
+      loadGraph().catch(() => {});
+      if ($('#settings').open) $('#settingsMsg').textContent = '⚠ Ayarlar başka yerden değişti — kaydetmeden önce pencereyi kapatıp yeniden açın.';
     });
     es.addEventListener('bridge_out', (e) => {
       const m = JSON.parse(e.data);
@@ -502,7 +616,9 @@
     const m = status.memory;
     $('#vaultStats').innerHTML = m.root
       ? `vault: <b>${esc(m.root)}</b><br>notlar: <b>${m.notes}</b>`
-      : 'vault: <b>bağlı değil</b> — Ayarlar ⚙ › Vault yolu<br><span>(arkaplandaki grafik şu an demo)</span>';
+      : m.missing
+        ? `vault: <b class="bad">yol bulunamadı</b><br><span title="${esc(m.configured)}">${esc(m.configured)}</span><br><span>(Google Drive açık mı? ↻ ile tekrar dene)</span>`
+        : 'vault: <b>bağlı değil</b> — Ayarlar ⚙ › Vault yolu<br><span>(arkaplandaki grafik şu an demo)</span>';
     $('#hostInfo').textContent = `${status.system.host} · ${status.system.cpu}`;
     $('#approveInfo').textContent = status.config.autoApprove ? 'OTOMATİK ONAY: AÇIK' : 'riskli işlemler onaya tabi';
   }
@@ -558,7 +674,12 @@
     </div>`;
   }
 
-  function openSettings() {
+  async function openSettings() {
+    try {
+      await refreshStatus(false);
+    } catch {
+      return activity('sunucuya ulaşılamadı — ayarlar açılmadı', '!');
+    }
     const c = status.config;
     const body = $('#settingsBody');
     body.innerHTML = `
@@ -611,6 +732,7 @@
     $('#settings').showModal();
   }
 
+  let savingSettings = false;
   async function saveSettings() {
     const body = $('#settingsBody');
     const eng = (id) => {
@@ -636,7 +758,8 @@
       providers: provs,
     };
     $('#settingsMsg').textContent = 'kaydediliyor…';
-    const r = await fetch('/api/config', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) });
+    savingSettings = true;
+    const r = await fetch('/api/config', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) }).finally(() => setTimeout(() => (savingSettings = false), 500));
     if (!r.ok) {
       $('#settingsMsg').textContent = '⚠ kaydedilemedi';
       return;
@@ -705,6 +828,34 @@
       return;
     }
     send(input.value);
+  });
+  $('#attachBtn').onclick = () => $('#fileInput').click();
+  $('#fileInput').onchange = (e) => {
+    addFiles(e.target.files);
+    e.target.value = '';
+    input.focus();
+  };
+  const composerEl = $('#composer');
+  const hasFiles = (e) => [...(e.dataTransfer?.types || [])].includes('Files');
+  for (const target of [composerEl, chat]) {
+    target.addEventListener('dragover', (e) => {
+      if (!hasFiles(e)) return;
+      e.preventDefault();
+      composerEl.classList.add('drop');
+    });
+    target.addEventListener('dragleave', () => composerEl.classList.remove('drop'));
+    target.addEventListener('drop', (e) => {
+      if (!hasFiles(e)) return;
+      e.preventDefault();
+      composerEl.classList.remove('drop');
+      addFiles(e.dataTransfer.files);
+    });
+  }
+  input.addEventListener('paste', (e) => {
+    const files = [...(e.clipboardData?.files || [])];
+    if (!files.length) return;
+    e.preventDefault();
+    addFiles(files.map((f, i) => (f.name && f.name !== 'image.png' ? f : new File([f], `yapistirilan-${Date.now()}-${i}.${(f.type.split('/')[1] || 'bin').replace('jpeg', 'jpg')}`, { type: f.type }))));
   });
   input.addEventListener('keydown', (e) => {
     if (e.key === 'Enter' && !e.shiftKey) {
@@ -786,6 +937,10 @@
   }, 1000);
   $('#clock').textContent = new Date().toLocaleTimeString('tr-TR', { hour: '2-digit', minute: '2-digit' });
   if (window.Notification && Notification.permission === 'default') Notification.requestPermission().catch(() => {});
+
+  setInterval(() => {
+    if (!busy && !document.hidden && status) refreshStatus(false).catch(() => {});
+  }, 30000);
 
   applyMode(mode, false);
   setOrbState('idle');

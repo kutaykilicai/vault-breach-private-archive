@@ -7,6 +7,7 @@ const router = require('./router');
 const { detectAll } = require('./detect');
 
 const MAX_STEPS = 12;
+const ATTACH_MARK = '\n\n📎 EKLER';
 
 const PERSONAS = {
   vault: {
@@ -81,15 +82,31 @@ function pickEngine(mode, tier) {
 async function run({ messages, mode, tier: forcedTier, emit, signal, requestApproval }) {
   const cfg = config.get();
   const lastUser = [...messages].reverse().find((m) => m.role === 'user');
-  const userText = typeof lastUser?.content === 'string' ? lastUser.content : '';
+  const fullText = typeof lastUser?.content === 'string' ? lastUser.content : '';
+  const userText = fullText.split(ATTACH_MARK)[0].trim() || fullText.slice(0, 2000);
 
   emit('state', { state: 'thinking' });
   const route = await router.classify(userText, forcedTier, mode);
   emit('route', { tier: route.tier, reason: route.reason, source: route.source, credits: route.credits, ms: Math.round(route.ms * 1000) / 1000 });
 
   if (route.tier === 1) {
-    emit('delta', { content: route.answer });
-    emit('done', { messages: [{ role: 'assistant', content: route.answer }] });
+    let answer = route.answer;
+    if (route.action) {
+      const { tool: name, args } = route.action;
+      const id = `t1_${Date.now()}`;
+      emit('tool_start', { id, name, args, risk: 'safe' });
+      let output;
+      try {
+        output = String(await tools.byName.get(name).run(args, { signal, mode }));
+      } catch (e) {
+        output = `Hata: ${e.message}`;
+      }
+      const ok = !output.startsWith('Hata');
+      emit('tool_end', { id, name, output, ok });
+      if (!ok) answer = `Açılamadı: ${output}`;
+    }
+    emit('delta', { content: answer });
+    emit('done', { messages: [{ role: 'assistant', content: answer }] });
     return;
   }
 
