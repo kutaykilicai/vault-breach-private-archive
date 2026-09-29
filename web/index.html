@@ -1,0 +1,129 @@
+<!doctype html>
+<html lang="tr">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>V.A.U.L.T.</title>
+  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Ccircle cx='16' cy='16' r='12' fill='none' stroke='%233aa0ff' stroke-width='3'/%3E%3Ccircle cx='16' cy='16' r='4' fill='%233aa0ff'/%3E%3C/svg%3E" />
+  <link rel="stylesheet" href="style.css" />
+</head>
+<body data-mode="vault">
+  <canvas id="graph"></canvas>
+  <div class="vignette"></div>
+  <div class="scanlines"></div>
+  <div id="breachFx" class="breach-fx"></div>
+
+  <div id="boot" class="boot">
+    <div class="boot-inner">
+      <div class="boot-logo" id="bootLogo">V.A.U.L.T.</div>
+      <div class="boot-sub" id="bootSub">Virtual Assistant for Universal &amp; Local Tasks</div>
+      <pre id="bootLog" class="boot-log"></pre>
+      <div class="boot-hint">devam etmek için tıkla</div>
+    </div>
+  </div>
+
+  <header class="topbar">
+    <div class="brand">
+      <div class="brand-mark"><span></span></div>
+      <div>
+        <div class="brand-name" id="brandName">V.A.U.L.T.</div>
+        <div class="brand-full" id="brandFull">Virtual Assistant for Universal &amp; Local Tasks</div>
+      </div>
+    </div>
+
+    <button id="modeSwitch" class="mode-switch" title="Mod değiştir (Ctrl+Shift+B)">
+      <span class="ms-opt ms-vault">V.A.U.L.T.</span>
+      <span class="ms-opt ms-breach">B.R.E.A.C.H.</span>
+      <i class="ms-knob"></i>
+    </button>
+
+    <div class="top-right">
+      <div class="chip" id="engineChip" title="Aktif motor">motor: —</div>
+      <div class="clock" id="clock">--:--</div>
+      <button class="icon-btn" id="newChatBtn" title="Yeni sohbet">＋</button>
+      <button class="icon-btn" id="settingsBtn" title="Ayarlar">⚙</button>
+    </div>
+  </header>
+
+  <main class="layout">
+    <aside class="panel left">
+      <section class="card">
+        <h3><span class="dot"></span>Beceriler <small id="skillCount"></small></h3>
+        <div id="skills" class="skills"></div>
+      </section>
+      <section class="card grow">
+        <h3><span class="dot"></span>Bağlantılar <button class="mini" id="refreshBtn" title="Yeniden tara">↻</button></h3>
+        <ul id="links" class="links"></ul>
+      </section>
+    </aside>
+
+    <section class="center">
+      <div class="orb-wrap">
+        <canvas id="orb" width="420" height="420"></canvas>
+        <div class="orb-title" id="orbTitle">V.A.U.L.T.</div>
+        <div class="orb-states" id="orbStates">
+          <span data-s="idle">Beklemede</span>
+          <span data-s="listening">Dinliyor</span>
+          <span data-s="thinking">Düşünüyor</span>
+          <span data-s="working">Çalışıyor</span>
+          <span data-s="speaking">Konuşuyor</span>
+        </div>
+      </div>
+
+      <div id="chat" class="chat"></div>
+
+      <form id="composer" class="composer">
+        <select id="tierSel" title="Yönlendirme katmanı">
+          <option value="">AUTO</option>
+          <option value="1">T1 · kural</option>
+          <option value="2">T2 · hızlı</option>
+          <option value="3">T3 · ajan</option>
+        </select>
+        <textarea id="input" rows="1" placeholder="Bir şey söyle ya da yaz…  (Enter gönder · Shift+Enter satır · Ctrl+Alt+J mikrofon)"></textarea>
+        <button type="button" class="icon-btn" id="micBtn" title="Sesle konuş (Ctrl+Alt+J)">🎙</button>
+        <button type="submit" class="send-btn" id="sendBtn">Gönder</button>
+      </form>
+    </section>
+
+    <aside class="panel right">
+      <section class="card">
+        <h3><span class="dot"></span>Hafıza <button class="mini" id="reindexBtn" title="Vault'u yeniden tara">↻</button></h3>
+        <div id="vaultStats" class="vault-stats"></div>
+        <div id="memHits" class="mem-hits"><div class="muted">Sorgu bekleniyor…</div></div>
+      </section>
+      <section class="card">
+        <h3><span class="dot"></span>Yönlendirme</h3>
+        <div id="routeLog" class="route-log"><div class="muted">Henüz istek yok.</div></div>
+      </section>
+      <section class="card grow">
+        <h3><span class="dot"></span>Aktivite</h3>
+        <div id="activity" class="activity"><div class="muted">Araç çağrısı yok.</div></div>
+      </section>
+    </aside>
+  </main>
+
+  <footer class="statusbar">
+    <span>MINDSET: <b>SPEAK</b> · <b>ROUTE</b> · <b class="hl">REMEMBER</b> · <b>REPEAT</b></span>
+    <span id="hostInfo"></span>
+    <span id="approveInfo"></span>
+  </footer>
+
+  <dialog id="settings" class="settings">
+    <form method="dialog" id="settingsForm">
+      <header>
+        <h2>Ayarlar</h2>
+        <button class="icon-btn" value="cancel" title="Kapat">✕</button>
+      </header>
+      <div class="settings-body" id="settingsBody"></div>
+      <footer>
+        <span class="muted" id="settingsMsg"></span>
+        <button type="button" class="send-btn" id="saveSettings">Kaydet</button>
+      </footer>
+    </form>
+  </dialog>
+
+  <script src="graph.js"></script>
+  <script src="orb.js"></script>
+  <script src="app.js"></script>
+</body>
+</html>
