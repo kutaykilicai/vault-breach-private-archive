@@ -5,6 +5,7 @@ const config = require('./config');
 const memory = require('./memory');
 const providers = require('./providers');
 const agent = require('./agent');
+const bridge = require('./bridge');
 const { detectAll } = require('./detect');
 
 const WEB = path.join(config.ROOT, 'web');
@@ -151,6 +152,23 @@ async function route(req, res) {
     return sendJson(res, 200, memory.stats());
   }
   if (p === '/api/chat' && req.method === 'POST') return handleChat(req, res);
+  if (p === '/api/events' && req.method === 'GET') return bridge.events(req, res);
+  if (p === '/api/bridge/message' && req.method === 'POST') {
+    try {
+      return sendJson(res, 200, await bridge.inbound(await readBody(req)));
+    } catch (e) {
+      return sendJson(res, 400, { error: e.message });
+    }
+  }
+  if (p === '/api/bridge/reply' && req.method === 'POST') {
+    const { id, text, status } = await readBody(req);
+    bridge.setReply(id, { status: status || 'done', text });
+    return sendJson(res, 200, { ok: true });
+  }
+  if (p === '/api/bridge/reply' && req.method === 'GET') return sendJson(res, 200, bridge.getReply(url.searchParams.get('id')));
+  if (p === '/api/bridge/outbox' && req.method === 'GET') {
+    return sendJson(res, 200, { messages: bridge.takeOutbox(url.searchParams.get('to') || 'grok') });
+  }
   if (p === '/api/approve' && req.method === 'POST') {
     const { id, allow } = await readBody(req);
     const fn = pendingApprovals.get(id);

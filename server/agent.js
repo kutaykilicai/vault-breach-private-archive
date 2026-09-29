@@ -49,6 +49,7 @@ async function systemPrompt(mode, tier, hits) {
         '- Kullanıcı hakkında bir şey bilmen gerekiyorsa önce memory_search kullan.\n' +
         '- Kalıcı değeri olan bilgileri, raporları ve kararları memory_write ile vault\'a kaydet ([[wikilink]] kullan).\n' +
         '- Riskli araçlar (komut, dosya yazma, program açma, CLI) kullanıcı onayından geçer; reddedilirse başka yol öner.\n' +
+        "- Kullanıcının Grok Bot'u ile köprün var: Grok Bot'a kendiliğinden bir şey iletmen gerekirse message_grok kullan. Mesaj Grok Bot'tan geldiyse cevabın ona otomatik gider.\n" +
         `- Kurulu AI CLI'lar: ${clis.length ? clis.join(', ') : 'yok'}. Danışılabilecek bulut modeller: ${ext.length ? ext.join(', ') : 'yok'}.`
     );
   }
@@ -150,7 +151,7 @@ async function run({ messages, mode, tier: forcedTier, emit, signal, requestAppr
       if (!output) {
         emit('state', { state: 'working' });
         try {
-          output = await tool.run(args, { signal });
+          output = await tool.run(args, { signal, mode });
         } catch (e) {
           output = `Hata: ${e.message}`;
         }

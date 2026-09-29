@@ -343,6 +343,8 @@ body.has-chat .orb-title { top: 58px; font-size: 13px; }
   border-radius: 14px 14px 4px 14px;
   white-space: pre-wrap;
 }
+.msg.user.ext { border-color: rgba(227, 107, 255, 0.55); background: rgba(227, 107, 255, 0.12); }
+.msg .from { font-family: var(--mono); font-size: 10.5px; letter-spacing: 0.15em; color: #e36bff; margin-bottom: 3px; }
 .msg.bot {
   align-self: flex-start;
   background: var(--panel);

@@ -48,6 +48,15 @@ Giriş kutusunun solundaki seçiciden katmanı elle de seçebilirsin.
 
 **Güvenlik:** `run_command`, `write_file`, `open_target` ve `delegate_cli` araçları her seferinde arayüzde onay ister. Ayarlar'daki "Otomatik onay" seçeneği bu onayı kapatır; açarken dikkatli ol. Sunucu yalnızca `127.0.0.1` adresini dinler, ağdaki başka cihazlar erişemez.
 
+## Grok Bot köprüsü
+
+Grok Bot bu bilgisayarda komut çalıştırabildiği için `bridge\grok.ps1` betiği üzerinden B.R.E.A.C.H. ile iki yönlü konuşabilir:
+
+- **Grok'tan B.R.E.A.C.H.'e:** `grok.ps1 -Mesaj "..."` çalıştırılır. Mesaj arayüzdeki sohbete mor "Grok Bot" etiketiyle düşer, B.R.E.A.C.H. cevaplar ve cevap aynı komutun çıktısı olarak Grok'a döner. Arayüz kapalıysa mesaj arka planda cevaplanır; bu durumda riskli işlemler (otomatik onay açık değilse) reddedilir.
+- **B.R.E.A.C.H.'ten Grok'a:** Ajanın `message_grok` aracı mesajı giden kutusuna (`data/outbox.json`) bırakır. Grok bu mesajları bir sonraki `-Mesaj` çağrısının çıktısında ya da `grok.ps1 -Gelen` komutuyla alır.
+
+Grok Bot'a yapıştırılacak hazır talimat metni: `bridge\GROK-TALIMAT.md`.
+
 ## API anahtarları
 
 - **Gemini**: https://aistudio.google.com adresinden ücretsiz anahtar alınabilir. Gemini CLI'ı (`npm i -g @google/gemini-cli`) Google hesabıyla ücretsiz kullanılabilir ve kuruluysa otomatik algılanır.

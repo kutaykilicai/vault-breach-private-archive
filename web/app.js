@@ -196,7 +196,7 @@
     const cards = new Map();
     for (const m of h) {
       if (m.role === 'user') {
-        chat.appendChild(el('div', 'msg user', esc(m.display || m.content)));
+        chat.appendChild(userBubble(m.display || m.content, m.from));
       } else if (m.role === 'assistant') {
         if (m.content) {
           const b = botBubble();
@@ -219,15 +219,15 @@
   }
 
   // ---------- gönderme / akış ----------
-  async function send(text, { tier, display } = {}) {
+  async function send(text, { tier, display, bridge } = {}) {
     text = text.trim();
     if (!text || busy) return;
     const h = histories[mode];
     const sendMode = mode;
-    h.push({ role: 'user', content: text, ...(display ? { display } : {}) });
+    h.push({ role: 'user', content: text, ...(display ? { display } : {}), ...(bridge ? { from: bridge.label } : {}) });
     saveHistories();
     document.body.classList.add('has-chat');
-    chat.appendChild(el('div', 'msg user', esc(display || text)));
+    chat.appendChild(userBubble(display || text, bridge?.label));
     scrollDown();
     input.value = '';
     autoGrow();
@@ -242,6 +242,7 @@
     let bubble = null;
     const cards = new Map();
     let finalText = '';
+    let errorMsg = null;
     let gotDone = false;
 
     const handlers = {
@@ -325,6 +326,7 @@
         if (status?.config?.voice?.tts && finalText.trim()) speak(finalText);
       },
       error(d) {
+        errorMsg = d.message;
         if (bubble) paintBubble(bubble, false);
         bubble = null;
         chat.appendChild(el('div', 'msg bot error', `⚠ ${esc(d.message)}`));
@@ -339,7 +341,7 @@
       const res = await fetch('/api/chat', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ mode: sendMode, tier: tier ?? $('#tierSel').value, messages: h.filter((m) => m.role !== 'error').map(({ display, ...m }) => m) }),
+        body: JSON.stringify({ mode: sendMode, tier: tier ?? $('#tierSel').value, messages: h.filter((m) => m.role !== 'error').map(({ display, from, ...m }) => m) }),
         signal: controller.signal,
       });
       const reader = res.body.getReader();
@@ -371,7 +373,48 @@
       sendBtn.classList.remove('stop');
       if (!window.speechSynthesis?.speaking) setOrbState('idle');
       updateEngineChip();
+      if (bridge) {
+        const reply = finalText.replace(/<think>[\s\S]*?<\/think>/g, '').trim();
+        await fetch('/api/bridge/reply', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ id: bridge.id, status: errorMsg ? 'error' : 'done', text: errorMsg ? `Hata: ${errorMsg}` : reply || '(boş yanıt)' }),
+        }).catch(() => {});
+        activity(`cevap <b>${esc(bridge.label)}</b>'a iletildi`, '⇄');
+      }
+      processBridgeQueue();
     }
+  }
+
+  // ---------- dış ajan köprüsü (Grok Bot) ----------
+  const bridgeQueue = [];
+
+  function userBubble(text, from) {
+    const b = el('div', `msg user${from ? ' ext' : ''}`);
+    if (from) b.appendChild(el('div', 'from', `⇄ ${esc(from)}`));
+    b.appendChild(document.createTextNode(text));
+    return b;
+  }
+
+  function processBridgeQueue() {
+    if (busy || !bridgeQueue.length) return;
+    const m = bridgeQueue.shift();
+    if (m.mode !== mode) applyMode(m.mode, true);
+    send(m.content, { display: m.text, bridge: { id: m.id, label: m.label } });
+  }
+
+  function connectEvents() {
+    const es = new EventSource('/api/events');
+    es.addEventListener('bridge_in', (e) => {
+      const m = JSON.parse(e.data);
+      activity(`<b>${esc(m.label)}</b> mesaj gönderdi`, '⇄');
+      bridgeQueue.push(m);
+      processBridgeQueue();
+    });
+    es.addEventListener('bridge_out', (e) => {
+      const m = JSON.parse(e.data);
+      activity(`Grok Bot'a mesaj bırakıldı: ${esc(m.text).slice(0, 80)}`, '⇄');
+    });
   }
 
   // ---------- ses ----------
@@ -679,4 +722,5 @@
   applyMode(mode, false);
   setOrbState('idle');
   boot();
+  connectEvents();
 })();

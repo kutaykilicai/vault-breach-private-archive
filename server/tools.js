@@ -6,6 +6,7 @@ const config = require('./config');
 const memory = require('./memory');
 const providers = require('./providers');
 const { which } = require('./detect');
+const bridge = require('./bridge');
 
 const isWin = process.platform === 'win32';
 const MAX_OUT = 12000;
@@ -236,6 +237,16 @@ const TOOLS = [
       if (!providers.isReady(provider)) return `${provider} için API anahtarı ayarlanmamış.`;
       const answer = await providers.complete({ provider, model, messages: [{ role: 'user', content: prompt }], signal: ctx.signal });
       return clip(answer, 15000);
+    },
+  },
+  {
+    name: 'message_grok',
+    risk: 'safe',
+    description: "Kullanıcının Grok Bot'una mesaj bırakır (Grok Bot giden kutusunu kontrol ettiğinde alır). Grok Bot'tan gelen bir mesaja cevap verirken KULLANMA; o cevap zaten otomatik iletilir.",
+    parameters: { type: 'object', properties: { text: { type: 'string' } }, required: ['text'] },
+    run: async ({ text }, ctx) => {
+      const m = bridge.queueOutgoing('grok', text, ctx.mode || 'breach');
+      return `Grok Bot'a mesaj kuyruğa alındı (id ${m.id}).`;
     },
   },
   {
