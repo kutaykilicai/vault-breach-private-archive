@@ -82,8 +82,9 @@ async function run({ messages, mode, tier: forcedTier, emit, signal, requestAppr
   const lastUser = [...messages].reverse().find((m) => m.role === 'user');
   const userText = typeof lastUser?.content === 'string' ? lastUser.content : '';
 
-  const route = router.classify(userText, forcedTier);
-  emit('route', { tier: route.tier, reason: route.reason, ms: Math.round(route.ms * 1000) / 1000 });
+  emit('state', { state: 'thinking' });
+  const route = await router.classify(userText, forcedTier, mode);
+  emit('route', { tier: route.tier, reason: route.reason, source: route.source, credits: route.credits, ms: Math.round(route.ms * 1000) / 1000 });
 
   if (route.tier === 1) {
     emit('delta', { content: route.answer });

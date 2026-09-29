@@ -248,8 +248,14 @@
       route(d) {
         const box = $('#routeLog');
         if (box.querySelector('.muted')) box.innerHTML = '';
-        box.prepend(el('div', 'r', `<span class="tier">T${d.tier}</span><span class="why">${esc(d.reason)}</span><span>${d.ms < 1 ? '<1' : d.ms.toFixed(1)}ms</span>`));
+        const src = d.source === 'jev' ? '<span class="src jev">JEV</span>' : '<span class="src">YEREL</span>';
+        const ms = d.ms < 1 ? '<1ms' : d.ms < 1000 ? `${d.ms.toFixed(0)}ms` : `${(d.ms / 1000).toFixed(1)}s`;
+        box.prepend(el('div', 'r', `<span class="tier">T${d.tier}</span>${src}<span class="why" title="${esc(d.reason)}">${esc(d.reason)}</span><span>${ms}</span>`));
         while (box.children.length > 30) box.lastChild.remove();
+        if (d.source === 'jev' && typeof d.credits === 'number') {
+          status.jev = { ...status.jev, credits: d.credits };
+          renderLinks();
+        }
       },
       memory(d) {
         const box = $('#memHits');
@@ -420,6 +426,11 @@
       if (k === 'local') add(p.online ? 'ok' : 'warn', p.label, p.online ? `${p.models.length} model` : 'çevrimdışı', p.models.join('\n'));
       else add(p.configured ? 'ok' : '', p.label, p.configured ? 'anahtar var' : 'anahtar yok');
     }
+    ul.appendChild(el('li', 'group', 'Sınıflandırıcı'));
+    const j = status.jev || {};
+    const credits = typeof j.credits === 'number' ? `${Math.floor(j.credits).toLocaleString('tr-TR')} kredi` : j.error ? 'hata' : '—';
+    if (!status.config.jev.hasKey) add('', 'Jev (freejev)', 'anahtar yok');
+    else add(j.enabled ? (j.error && typeof j.credits !== 'number' ? 'warn' : 'ok') : '', 'Jev (freejev)', j.enabled ? credits : 'kapalı', j.error || '');
     ul.appendChild(el('li', 'group', 'CLI araçları'));
     for (const [k, c] of Object.entries(status.clis)) add(c.found ? 'ok' : '', k, c.found ? 'bulundu' : 'yok', c.path || '');
     ul.appendChild(el('li', 'group', 'Sistem'));
@@ -505,6 +516,13 @@
         <p class="hint">B.R.E.A.C.H. için "LM Studio (Yerel)" seçin ve LM Studio'da sansürsüz modeli yükleyip Local Server'ı açın. Model adı boşsa yüklü ilk model kullanılır.</p>
       </fieldset>
       <fieldset>
+        <legend>Jev sınıflandırıcı</legend>
+        <div class="row"><label>Jev kullan</label><label><input type="checkbox" id="sJev" ${c.jev.enabled ? 'checked' : ''}/> T2/T3 kararını Jev versin (hata olursa yerel sezgiye düşer)</label></div>
+        <div class="row"><label>FreeJev anahtarı</label><input type="password" id="sJevKey" value="${esc(c.jev.apiKey || '')}" placeholder="sk-freejev-…" /></div>
+        <div class="row"><label>B.R.E.A.C.H.'te de</label><label><input type="checkbox" id="sJevBreach" ${c.jev.useInBreach ? 'checked' : ''}/> B.R.E.A.C.H. modunda da kullan</label></div>
+        <p class="hint">Jev uzak bir servistir: mesajının ilk 2000 karakteri sınıflandırma için freejev.org'a (oradan TypeSafe/OpenRouter'a) gider. Tamamen yerel kalmak istediğin konuşmalar için B.R.E.A.C.H. seçeneğini kapat.</p>
+      </fieldset>
+      <fieldset>
         <legend>API anahtarları</legend>
         ${Object.entries(c.providers)
           .map(([k, p]) => `<div class="prov" data-prov="${k}"><b>${esc(p.label || k)}</b><input type="text" class="purl" value="${esc(p.baseUrl)}" /><input type="password" class="pkey" value="${esc(p.apiKey || '')}" placeholder="API anahtarı" /></div>`)
@@ -548,6 +566,7 @@
       voice: { tts: $('#sTts').checked },
       modes: { vault: eng('vault'), breach: eng('breach') },
       fastModel: eng('fast'),
+      jev: { enabled: $('#sJev').checked, apiKey: $('#sJevKey').value.trim(), useInBreach: $('#sJevBreach').checked },
       memory: { coreNotes: $('#sCore').value.split(',').map((s) => s.trim()).filter(Boolean), logConversations: $('#sLog').checked },
       providers: provs,
     };
@@ -591,6 +610,9 @@
     for (const [k, p] of Object.entries(st.providers)) {
       if (k === 'local') await line(p.online ? `<span class="ok">> ${esc(p.label)}: çevrimiçi (${p.models.length} model)</span>` : `<span class="warn">> ${esc(p.label)}: çevrimdışı</span>`);
       else await line(p.configured ? `<span class="ok">> ${esc(p.label)}: hazır</span>` : `<span class="no">> ${esc(p.label)}: anahtar yok</span>`, 70);
+    }
+    if (st.config.jev.hasKey && st.jev.enabled) {
+      await line(typeof st.jev.credits === 'number' ? `<span class="ok">> Jev sınıflandırıcı: hazır (${Math.floor(st.jev.credits)} kredi)</span>` : `<span class="warn">> Jev sınıflandırıcı: ${esc(st.jev.error || 'bakiye okunamadı')}</span>`);
     }
     for (const [k, c] of Object.entries(st.clis)) await line(c.found ? `<span class="ok">> ${k} CLI: bulundu</span>` : `<span class="no">> ${k} CLI: yok</span>`, 60);
     await Promise.all([loadGraph(), loadSkills()]);

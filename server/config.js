@@ -15,6 +15,13 @@ const DEFAULTS = {
     breach: { provider: 'local', model: '' },
   },
   fastModel: { provider: '', model: '' },
+  jev: {
+    enabled: true,
+    baseUrl: 'https://freejev.org/api/v1',
+    apiKey: '',
+    useInBreach: true,
+    timeoutMs: 4000,
+  },
   memory: {
     coreNotes: [],
     maxHits: 5,
@@ -83,6 +90,8 @@ function masked() {
     p.hasKey = Boolean(p.apiKey);
     if (p.apiKey && p.apiKey !== 'lm-studio') p.apiKey = MASK;
   }
+  c.jev.hasKey = Boolean(c.jev.apiKey);
+  if (c.jev.apiKey) c.jev.apiKey = MASK;
   return c;
 }
 
@@ -92,6 +101,10 @@ function updateFromClient(incoming) {
   for (const [name, p] of Object.entries(merged.providers || {})) {
     if (p.apiKey === MASK) p.apiKey = c.providers[name]?.apiKey || '';
     delete p.hasKey;
+  }
+  if (merged.jev) {
+    if (merged.jev.apiKey === MASK) merged.jev.apiKey = c.jev.apiKey;
+    delete merged.jev.hasKey;
   }
   return save(merged);
 }

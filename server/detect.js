@@ -2,6 +2,7 @@ const { execFile } = require('child_process');
 const os = require('os');
 const config = require('./config');
 const providers = require('./providers');
+const { jevUsage } = require('./router');
 
 const isWin = process.platform === 'win32';
 
@@ -40,9 +41,12 @@ async function detectAll(force = false) {
     })
   );
 
+  const jev = cfg.jev?.apiKey ? { enabled: cfg.jev.enabled, ...(await jevUsage()) } : { enabled: false };
+
   cache = {
     at: Date.now(),
     data: {
+      jev,
       clis,
       providers: Object.fromEntries(provEntries),
       system: {
