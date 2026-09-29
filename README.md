@@ -1,6 +1,13 @@
-# V.A.U.L.T. // B.R.E.A.C.H.
+<p align="center">
+  <img src="assets/brand/vault-logo.png" alt="V.A.U.L.T." width="220"/>
+  &nbsp;&nbsp;
+  <img src="assets/brand/breach-logo.png" alt="B.R.E.A.C.H." width="220"/>
+</p>
 
-Yerel, hafızalı AI ajan arayüzü.
+<h1 align="center">V.A.U.L.T. // B.R.E.A.C.H.</h1>
+
+<p align="center">Yerel, hafızalı AI ajan arayüzü.</p>
+
 
 - **V.A.U.L.T.** (mavi): Virtual Assistant for Universal & Local Tasks. Bulut motorlarla çalışır (OpenRouter, Kimi, Gemini, Grok).
 - **B.R.E.A.C.H.** (kırmızı): Bypassed Reactive Entity for Autonomous Cognitive Heuristics. LM Studio'daki yerel sansürsüz modelle çalışır.
@@ -19,10 +26,6 @@ Yerel, hafızalı AI ajan arayüzü.
 ### Hafıza / Obsidian
 ![Obsidian hafıza grafiği](assets/screenshots/obsidian-graph.png)
 
-### Marka
-![V.A.U.L.T. logo](assets/brand/vault-logo.png)
-
-![B.R.E.A.C.H. logo](assets/brand/breach-logo.png)
 
 ## V.A.U.L.T. paneli
 ![V.A.U.L.T. dashboard](assets/screenshots/vault-dashboard.png)
