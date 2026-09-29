@@ -11,6 +11,20 @@ Yerel, hafızalı AI ajan arayüzü.
 ## Ekran görüntüleri
 
 ### V.A.U.L.T. paneli
+![V.A.U.L.T. paneli](assets/screenshots/vault-panel.png)
+
+### B.R.E.A.C.H. paneli
+![B.R.E.A.C.H. paneli](assets/screenshots/breach-panel.png)
+
+### Hafıza / Obsidian
+![Obsidian hafıza grafiği](assets/screenshots/obsidian-graph.png)
+
+### Marka
+![V.A.U.L.T. logo](assets/brand/vault-logo.png)
+
+![B.R.E.A.C.H. logo](assets/brand/breach-logo.png)
+
+## V.A.U.L.T. paneli
 ![V.A.U.L.T. dashboard](assets/screenshots/vault-dashboard.png)
 
 ### Beceri: Günü Planla
