@@ -7,6 +7,21 @@ Yerel, hafızalı AI ajan arayüzü.
 
 İki modda da Obsidian vault'u hafıza olarak kullanılır ve arkaplanda hafıza grafiği görünür. Harici paket yoktur, sadece Node.js gerekir.
 
+
+## Ekran görüntüleri
+
+### V.A.U.L.T. paneli
+![V.A.U.L.T. dashboard](assets/screenshots/vault-dashboard.png)
+
+### Beceri: Günü Planla
+![Günü Planla başlatıldı](assets/screenshots/vault-skill-gunu-planla.png)
+
+### Hafıza / Obsidian okuma
+![Obsidian notları okunuyor](assets/screenshots/vault-obsidian-okuma.png)
+
+### Örnek çıktı
+![Günün özeti ve planı](assets/screenshots/vault-gun-plani-cikti.png)
+
 ## Kasada kurulum (bir kerelik)
 
 1. **Node.js LTS** kur: https://nodejs.org (yaklaşık 30 MB).
