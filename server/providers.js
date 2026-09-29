@@ -9,6 +9,10 @@ function getProvider(name) {
 function headers(p, name) {
   const h = { 'Content-Type': 'application/json' };
   if (p.apiKey) h.Authorization = `Bearer ${p.apiKey}`;
+  if (name === 'anthropic' && p.apiKey) {
+    h['x-api-key'] = p.apiKey;
+    h['anthropic-version'] = '2023-06-01';
+  }
   if (name === 'openrouter') {
     h['HTTP-Referer'] = 'http://127.0.0.1';
     h['X-Title'] = 'VAULT-BREACH';
@@ -31,11 +35,16 @@ async function listModels(name, timeoutMs = 4000) {
   if (!res.ok) throw new Error(`${name} /models: HTTP ${res.status}`);
   const data = await res.json();
   const list = data.data || data.models || [];
-  return list.map((m) => (typeof m === 'string' ? m : m.id || m.name)).filter(Boolean);
+  return list
+    .map((m) => (typeof m === 'string' ? m : m.id || m.name))
+    .filter(Boolean)
+    .map((id) => id.replace(/^models\//, ''));
 }
 
 async function resolveModel(name, model) {
   if (model) return model;
+  const def = config.get().providers[name]?.defaultModel;
+  if (def) return def;
   const models = await listModels(name);
   if (!models.length) throw new Error(`${name} için model bulunamadı. Ayarlardan model seçin (LM Studio'da model yüklü mü?).`);
   return models[0];
@@ -46,7 +55,28 @@ async function resolveModel(name, model) {
  * onDelta({content, reasoning}) her parçada çağrılır.
  * Dönen değer: { content, toolCalls, finishReason }
  */
-async function streamChat({ provider, model, messages, tools, signal, onDelta, temperature }) {
+const NETWORK_ERR = /terminated|fetch failed|ECONNRESET|ETIMEDOUT|EAI_AGAIN|socket|other side closed/i;
+
+async function streamChat(opts) {
+  let received = false;
+  const onDelta = (d) => {
+    received = true;
+    opts.onDelta?.(d);
+  };
+  for (let attempt = 0; ; attempt++) {
+    try {
+      return await streamOnce({ ...opts, onDelta });
+    } catch (e) {
+      const msg = `${e.message} ${e.cause?.code || ''}`;
+      if (opts.signal?.aborted || !NETWORK_ERR.test(msg)) throw e;
+      if (received) throw new Error(`${opts.provider} bağlantısı cevap ortasında koptu (internet bağlantısını kontrol edin). "devam" yazarak sürdürebilirsiniz.`);
+      if (attempt >= 2) throw new Error(`${opts.provider} sunucusuna ulaşılamadı (${e.cause?.code || e.message}).`);
+      await new Promise((r) => setTimeout(r, 1500 * (attempt + 1)));
+    }
+  }
+}
+
+async function streamOnce({ provider, model, messages, tools, signal, onDelta, temperature }) {
   const p = getProvider(provider);
   const body = {
     model: await resolveModel(provider, model),
@@ -71,6 +101,7 @@ async function streamChat({ provider, model, messages, tools, signal, onDelta, t
   }
 
   let content = '';
+  let reasoningText = '';
   let finishReason = null;
   const toolCalls = [];
   const decoder = new TextDecoder();
@@ -95,7 +126,10 @@ async function streamChat({ provider, model, messages, tools, signal, onDelta, t
       if (!choice) continue;
       const d = choice.delta || {};
       const reasoning = d.reasoning_content || d.reasoning;
-      if (reasoning) onDelta?.({ reasoning });
+      if (reasoning) {
+        reasoningText += reasoning;
+        onDelta?.({ reasoning });
+      }
       if (d.content) {
         content += d.content;
         onDelta?.({ content: d.content });
@@ -111,7 +145,7 @@ async function streamChat({ provider, model, messages, tools, signal, onDelta, t
     }
   }
 
-  return { content, toolCalls: toolCalls.filter(Boolean), finishReason, model: body.model };
+  return { content, reasoning: reasoningText, toolCalls: toolCalls.filter(Boolean), finishReason, model: body.model };
 }
 
 async function complete({ provider, model, messages, signal }) {

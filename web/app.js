@@ -58,6 +58,14 @@
     const out = [];
     let list = null;
     let para = [];
+    let table = null;
+    const cells = (row) => row.trim().replace(/^\||\|$/g, '').split('|').map((c) => c.trim());
+    const flushTable = () => {
+      if (!table) return;
+      const [head, ...body] = table;
+      out.push(`<table><thead><tr>${cells(head).map((c) => `<th>${c}</th>`).join('')}</tr></thead><tbody>${body.map((r) => `<tr>${cells(r).map((c) => `<td>${c}</td>`).join('')}</tr>`).join('')}</tbody></table>`);
+      table = null;
+    };
     const flushPara = () => {
       if (para.length) out.push(`<p>${para.join('<br>')}</p>`);
       para = [];
@@ -68,6 +76,13 @@
     };
     for (const line of s.split('\n')) {
       let m;
+      if (/^\s*\|.*\|\s*$/.test(line)) {
+        flushPara();
+        flushList();
+        if (!/^\s*\|?[\s:|-]+\|?\s*$/.test(line) || !table) (table ||= []).push(line);
+        continue;
+      }
+      flushTable();
       if (/^\u0000\d+\u0000$/.test(line.trim())) {
         flushPara();
         flushList();
@@ -94,6 +109,7 @@
     }
     flushPara();
     flushList();
+    flushTable();
     let html = out.join('').replace(/\u0000(\d+)\u0000/g, (_, i) => blocks[i]);
     if (think.trim()) html = `<details class="think"><summary>◇ düşünce süreci</summary><div>${esc(think.trim())}</div></details>` + html;
     return html;
@@ -149,7 +165,8 @@
     const cfg = status?.config;
     if (!cfg) return;
     const e = cfg.modes[mode];
-    const label = live || `${cfg.providers[e.provider]?.label || e.provider}${e.model ? ` · ${e.model}` : ''}`;
+    const model = e.model || cfg.providers[e.provider]?.defaultModel;
+    const label = live || `${cfg.providers[e.provider]?.label || e.provider}${model ? ` · ${model}` : ''}`;
     $('#engineChip').textContent = `motor: ${label}`;
     $('#engineChip').title = label;
   }
@@ -288,6 +305,7 @@
         scrollDown();
       },
       segment() {
+        if (finalText && !finalText.endsWith('\n\n')) finalText += '\n\n';
         if (bubble) {
           if (!bubble.text.trim() && !bubble.reasoning) bubble.root.remove();
           else paintBubble(bubble, false);
@@ -534,7 +552,7 @@
     return `<div class="row three" data-engine="${id}">
       <label>${label}</label>
       <select class="eprov">${allowEmpty ? `<option value="" ${!e.provider ? 'selected' : ''}>— ana motor —</option>` : ''}${providerOptions(e.provider)}</select>
-      <input type="text" class="emodel" list="dl-${id}" value="${esc(e.model || '')}" placeholder="boş = sunucudaki ilk model" />
+      <input type="text" class="emodel" list="dl-${id}" value="${esc(e.model || '')}" placeholder="boş = sağlayıcının varsayılan modeli" />
       <button type="button" class="mini elist" title="Modelleri getir" style="width:auto;padding:0 8px">liste</button>
       <datalist id="dl-${id}"></datalist>
     </div>`;
@@ -568,7 +586,7 @@
       <fieldset>
         <legend>API anahtarları</legend>
         ${Object.entries(c.providers)
-          .map(([k, p]) => `<div class="prov" data-prov="${k}"><b>${esc(p.label || k)}</b><input type="text" class="purl" value="${esc(p.baseUrl)}" /><input type="password" class="pkey" value="${esc(p.apiKey || '')}" placeholder="API anahtarı" /></div>`)
+          .map(([k, p]) => `<div class="prov" data-prov="${k}"><b>${esc(p.label || k)}</b><input type="text" class="purl" value="${esc(p.baseUrl)}" title="Adres" /><input type="password" class="pkey" value="${esc(p.apiKey || '')}" placeholder="API anahtarı" /><input type="text" class="pdef" value="${esc(p.defaultModel || '')}" placeholder="varsayılan model" title="Varsayılan model" /></div>`)
           .join('')}
         <p class="hint">Anahtarlar sadece bu bilgisayardaki <code>config.json</code> dosyasında durur. Gemini için ücretsiz anahtar: aistudio.google.com. Perplexity API ücretlidir.</p>
       </fieldset>
@@ -601,7 +619,11 @@
     };
     const provs = {};
     body.querySelectorAll('[data-prov]').forEach((r) => {
-      provs[r.dataset.prov] = { baseUrl: r.querySelector('.purl').value.trim(), apiKey: r.querySelector('.pkey').value.trim() };
+      provs[r.dataset.prov] = {
+        baseUrl: r.querySelector('.purl').value.trim(),
+        apiKey: r.querySelector('.pkey').value.trim(),
+        defaultModel: r.querySelector('.pdef').value.trim(),
+      };
     });
     const payload = {
       vaultPath: $('#sVault').value.trim().replace(/^"|"$/g, ''),
@@ -675,6 +697,13 @@
       busy.abort();
       return;
     }
+    const cmd = /^\/(temizle|clear)(\s+(hepsi|tümü|tumu|all))?\s*$/i.exec(input.value.trim());
+    if (cmd) {
+      input.value = '';
+      autoGrow();
+      clearChats(cmd[3] ? 'all' : 'mode');
+      return;
+    }
     send(input.value);
   });
   input.addEventListener('keydown', (e) => {
@@ -702,6 +731,45 @@
     renderChat();
     activity('yeni sohbet', '＋');
   };
+
+  async function clearChats(scope, panels = true) {
+    if (busy) {
+      activity('yanıt sürerken temizlenemez — önce Durdur', '!');
+      return;
+    }
+    window.speechSynthesis?.cancel();
+    const modes = scope === 'all' ? ['vault', 'breach'] : [mode];
+    for (const m of modes) histories[m] = [];
+    saveHistories();
+    await fetch('/api/chat/reset', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ mode: scope === 'all' ? 'all' : mode }),
+    }).catch(() => {});
+    renderChat();
+    if (panels) {
+      $('#memHits').innerHTML = '<div class="muted">Sorgu bekleniyor…</div>';
+      $('#routeLog').innerHTML = '<div class="muted">Henüz istek yok.</div>';
+      $('#activity').innerHTML = '';
+    }
+    setOrbState('idle');
+    activity(scope === 'all' ? 'tüm sohbetler temizlendi' : `${PERSONA[mode].name} sohbeti temizlendi`, '🗑');
+  }
+
+  const clearMenu = $('#clearMenu');
+  $('#clearBtn').onclick = (e) => {
+    e.stopPropagation();
+    $('#clearModeBtn').textContent = `Bu modun sohbeti (${PERSONA[mode].name})`;
+    clearMenu.hidden = !clearMenu.hidden;
+  };
+  clearMenu.addEventListener('click', (e) => {
+    e.stopPropagation();
+    const scope = e.target.closest('[data-clear]')?.dataset.clear;
+    if (!scope) return;
+    clearMenu.hidden = true;
+    clearChats(scope, $('#clearPanels').checked);
+  });
+  document.addEventListener('click', () => (clearMenu.hidden = true));
   document.addEventListener('keydown', (e) => {
     if (e.ctrlKey && e.altKey && e.key.toLowerCase() === 'j') {
       e.preventDefault();

@@ -100,7 +100,7 @@ async function run({ messages, mode, tier: forcedTier, emit, signal, requestAppr
   if (!providers.isReady(engine.provider)) {
     throw new Error(`"${engine.provider}" sağlayıcısı hazır değil. Ayarlardan API anahtarı girin veya başka motor seçin.`);
   }
-  emit('engine', { provider: engine.provider, model: engine.model || '(otomatik)' });
+  emit('engine', { provider: engine.provider, model: engine.model || cfg.providers[engine.provider]?.defaultModel || '(otomatik)' });
 
   const sys = { role: 'system', content: await systemPrompt(mode, route.tier, hits) };
   const history = messages.filter((m) => m.role !== 'system').slice(-40);
@@ -128,7 +128,9 @@ async function run({ messages, mode, tier: forcedTier, emit, signal, requestAppr
       break;
     }
 
-    added.push({ role: 'assistant', content: stripThink(result.content) || null, tool_calls: result.toolCalls });
+    const callMsg = { role: 'assistant', content: stripThink(result.content) || null, tool_calls: result.toolCalls };
+    if (engine.provider === 'kimi' && result.reasoning) callMsg.reasoning_content = result.reasoning;
+    added.push(callMsg);
     emit('segment', {});
 
     for (const call of result.toolCalls) {

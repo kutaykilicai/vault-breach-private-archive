@@ -223,11 +223,11 @@ const TOOLS = [
   {
     name: 'ask_model',
     risk: 'safe',
-    description: 'Başka bir yapay zekâya danışır (grok = xAI, perplexity = güncel web araştırması, gemini, kimi, openrouter, local). Dikkat: veriler o servisin sunucusuna gider.',
+    description: 'Başka bir yapay zekâya danışır (anthropic = Claude, xai = Grok, perplexity = güncel web araştırması, gemini, kimi, nvidia, openrouter, local). Dikkat: veriler o servisin sunucusuna gider.',
     parameters: {
       type: 'object',
       properties: {
-        provider: { type: 'string', enum: ['xai', 'perplexity', 'gemini', 'kimi', 'openrouter', 'local'] },
+        provider: { type: 'string', enum: ['anthropic', 'xai', 'perplexity', 'gemini', 'kimi', 'nvidia', 'openrouter', 'local'] },
         prompt: { type: 'string' },
         model: { type: 'string', description: 'Opsiyonel model adı' },
       },

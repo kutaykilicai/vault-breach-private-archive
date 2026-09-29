@@ -62,7 +62,7 @@ function setReply(id, data) {
   for (const [k, v] of replies) if (Date.now() - v.at > 60 * 60 * 1000) replies.delete(k);
 }
 
-async function runHeadless(id, from, text, mode) {
+async function runHeadless(id, from, text, mode, requestApproval = async () => false) {
   const agent = require('./agent');
   const hist = headlessHistory[mode];
   hist.push({ role: 'user', content: text });
@@ -74,10 +74,11 @@ async function runHeadless(id, from, text, mode) {
       mode,
       emit: (ev, d) => {
         if (ev === 'delta') out += d.content;
+        if (ev === 'segment' && out && !out.endsWith('\n\n')) out += '\n\n';
         if (ev === 'done') hist.push(...d.messages);
       },
       signal: new AbortController().signal,
-      requestApproval: async () => false,
+      requestApproval,
     });
   } catch (e) {
     error = e.message;
@@ -85,17 +86,23 @@ async function runHeadless(id, from, text, mode) {
   setReply(id, { status: error ? 'error' : 'done', text: error ? `Hata: ${error}` : out.replace(/<think>[\s\S]*?<\/think>/g, '').trim(), headless: true });
 }
 
-async function inbound({ text, from = 'grok', mode = 'breach', wait = true, timeoutSec = 300 }) {
+const SOURCES = {
+  grok: { label: 'Grok Bot', prefix: "[Grok Bot'tan mesaj — cevabın ona otomatik iletilecek]\n" },
+  telegram: { label: 'Telegram', prefix: '' },
+};
+
+async function inbound({ text, from = 'grok', mode = 'breach', wait = true, timeoutSec = 300, requestApproval }) {
   if (!text || !String(text).trim()) throw new Error('Mesaj boş');
   mode = mode === 'vault' ? 'vault' : 'breach';
   const id = crypto.randomUUID().slice(0, 8);
-  const label = from === 'grok' ? 'Grok Bot' : from;
-  const content = `[${label}'tan mesaj — cevabın ona otomatik iletilecek]\n${String(text).trim()}`;
+  const src = SOURCES[from] || { label: from, prefix: `[${from} üzerinden mesaj]\n` };
+  const label = src.label;
+  const content = `${src.prefix}${String(text).trim()}`;
   replies.set(id, { status: 'pending', at: Date.now() });
 
   const ui = [...clients].pop();
   if (ui) ui.write(`event: bridge_in\ndata: ${JSON.stringify({ id, from, label, text: String(text).trim(), content, mode })}\n\n`);
-  else runHeadless(id, from, content, mode);
+  else runHeadless(id, from, content, mode, requestApproval);
 
   if (!wait) return { id, status: 'pending' };
   await new Promise((resolve) => {
@@ -113,4 +120,8 @@ function getReply(id) {
   return replies.get(id) || { status: 'unknown' };
 }
 
-module.exports = { events, broadcast, inbound, setReply, getReply, queueOutgoing, takeOutbox };
+function resetHeadless(mode) {
+  if (headlessHistory[mode]) headlessHistory[mode] = [];
+}
+
+module.exports = { resetHeadless, events, broadcast, inbound, setReply, getReply, queueOutgoing, takeOutbox };

@@ -41,6 +41,16 @@
       <div class="chip" id="engineChip" title="Aktif motor">motor: —</div>
       <div class="clock" id="clock">--:--</div>
       <button class="icon-btn" id="newChatBtn" title="Yeni sohbet">＋</button>
+      <div class="clear-wrap">
+        <button class="icon-btn" id="clearBtn" title="Sohbeti temizle (/temizle)">🗑</button>
+        <div class="clear-menu" id="clearMenu" hidden>
+          <div class="cm-title">Sohbeti temizle</div>
+          <button type="button" data-clear="mode" id="clearModeBtn">Bu modun sohbeti</button>
+          <button type="button" data-clear="all">Tüm sohbetler (iki mod)</button>
+          <label><input type="checkbox" id="clearPanels" checked /> Hafıza, yönlendirme ve aktivite panelleri de</label>
+          <p>Vault'taki sohbet kayıtları silinmez. Kısayol: kutuya <code>/temizle</code> veya <code>/temizle hepsi</code> yaz.</p>
+        </div>
+      </div>
       <button class="icon-btn" id="settingsBtn" title="Ayarlar">⚙</button>
     </div>
   </header>

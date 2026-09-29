@@ -152,6 +152,11 @@ async function route(req, res) {
     return sendJson(res, 200, memory.stats());
   }
   if (p === '/api/chat' && req.method === 'POST') return handleChat(req, res);
+  if (p === '/api/chat/reset' && req.method === 'POST') {
+    const { mode } = await readBody(req);
+    for (const m of mode === 'all' ? ['vault', 'breach'] : [mode]) bridge.resetHeadless(m);
+    return sendJson(res, 200, { ok: true });
+  }
   if (p === '/api/events' && req.method === 'GET') return bridge.events(req, res);
   if (p === '/api/bridge/message' && req.method === 'POST') {
     try {
@@ -198,4 +203,16 @@ server.listen(cfg.port, HOST, () => {
   console.log(`  Vault  : ${memory.vaultRoot() || '(ayarlanmadı)'}${n ? ` · ${n} not` : ''}`);
   console.log('  Kapatmak için bu pencerede Ctrl+C');
   console.log('');
+  if (process.env.VB_OPEN === '1') {
+    require('child_process').execFile('cmd.exe', ['/c', 'start', '', `http://${HOST}:${cfg.port}`], { windowsHide: true });
+  }
+});
+
+server.on('error', (e) => {
+  if (e.code === 'EADDRINUSE') {
+    console.error(`  Port ${cfg.port} zaten kullanımda: uygulama muhtemelen açık. Tarayıcıda http://${HOST}:${cfg.port} adresine gidin.`);
+  } else {
+    console.error(e);
+  }
+  process.exit(1);
 });
