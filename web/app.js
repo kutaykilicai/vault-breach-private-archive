@@ -614,8 +614,12 @@
 
   function renderVaultStats() {
     const m = status.memory;
+    const extra = (m.roots || []).filter((r) => r.id !== 'vault');
+    const breakdown = extra.length
+      ? `<br>${(m.roots || []).map((r) => `<span class="${r.missing ? 'bad' : ''}">${esc(r.id)}: ${r.missing ? 'yol yok' : r.notes}</span>`).join(' · ')}`
+      : '';
     $('#vaultStats').innerHTML = m.root
-      ? `vault: <b>${esc(m.root)}</b><br>notlar: <b>${m.notes}</b>`
+      ? `vault: <b>${esc(m.root)}</b><br>notlar: <b>${m.notes}</b>${breakdown}`
       : m.missing
         ? `vault: <b class="bad">yol bulunamadı</b><br><span title="${esc(m.configured)}">${esc(m.configured)}</span><br><span>(Google Drive açık mı? ↻ ile tekrar dene)</span>`
         : 'vault: <b>bağlı değil</b> — Ayarlar ⚙ › Vault yolu<br><span>(arkaplandaki grafik şu an demo)</span>';
@@ -686,8 +690,17 @@
       <fieldset>
         <legend>Hafıza (Obsidian)</legend>
         <div class="row"><label>Vault yolu</label><input type="text" id="sVault" value="${esc(c.vaultPath)}" placeholder="C:\\Users\\...\\Obsidian\\Vault" /></div>
-        <div class="row"><label>Çekirdek notlar</label><input type="text" id="sCore" value="${esc((c.memory.coreNotes || []).join(', '))}" placeholder="_beyin/kimlik.md, _beyin/kurallar.md" /></div>
+        <div class="row"><label>Çekirdek notlar</label><input type="text" id="sCore" value="${esc((c.memory.coreNotes || []).join(', '))}" placeholder="profile/me.md" /></div>
         <p class="hint">Çekirdek notlar her mesajda ajana verilir (kimlik, tercihler, kurallar). Diğer notlar soruya göre otomatik aranır.</p>
+        <div class="row"><label>Ek hafıza kökleri</label><textarea id="sExtra" rows="3" placeholder="I:\\Obsidian_Vault\\Claude_Vault">${esc((c.memory.extraRoots || []).map((r) => r.path).join('\n'))}</textarea></div>
+        <p class="hint">Her satıra bir klasör. Bu kökler <b>salt okunur</b> indekslenir: aramaya girer, grafikte görünür, ama ajan oraya yazamaz. Obsidian beynini kasaya kopyalamadan aranabilir yapmanın yolu budur. <b>iş, müşteri, mail, gizli, fatura, banka, anahtar</b> gibi klasörler güvenlik için otomatik olarak dışarıda bırakılır.</p>
+        <div class="row pair"><label>Arama bütçesi</label>
+          <label class="inline">soru başına not <input type="number" id="sMaxHits" min="1" max="50" value="${Number(c.memory.maxHits) || 5}" /></label>
+          <label class="inline">not başına karakter <input type="number" id="sSnippet" min="120" max="4000" step="50" value="${Number(c.memory.snippetChars) || 400}" /></label>
+        </div>
+        <p class="hint">Yüzlerce not aranabilir olduğunda sınırlayıcı bunlardır. Öneri: bulut motorda 8 not / 700 karakter, küçük yerel modelde 5 not / 400 karakter.</p>
+        <div class="row"><label>Aramadan çıkar</label><input type="text" id="sExclude" value="${esc((c.memory.excludeGlobs || []).join(', '))}" placeholder="inbox/sohbet-kayitlari/**" /></div>
+        <p class="hint">Kasadaki yollar (glob, virgülle ayrılır). Sohbet kayıtları aramayı boğuyorsa buraya <code>inbox/sohbet-kayitlari/**</code> ekleyin; dosyalar silinmez, yalnızca aranmaz.</p>
         <div class="row"><label>Sohbetleri kaydet</label><label><input type="checkbox" id="sLog" ${c.memory.logConversations ? 'checked' : ''}/> vault içine <code>${esc(c.memory.logFolder)}</code> klasörüne günlük kayıt</label></div>
       </fieldset>
       <fieldset>
@@ -732,6 +745,22 @@
     $('#settings').showModal();
   }
 
+  // Her satır bir klasör; kimlik klasör adından üretilir (ajanın not yollarında bu kimlik geçer).
+  function extraRootsFromInput(value) {
+    const used = new Set(['vault']);
+    return value
+      .split('\n')
+      .map((s) => s.trim().replace(/^"|"$/g, ''))
+      .filter(Boolean)
+      .map((p) => {
+        const base = p.replace(/[\\/]+$/, '').split(/[\\/]/).pop() || 'ek';
+        let id = base.toLocaleLowerCase('tr').replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '').slice(0, 24) || 'ek';
+        while (used.has(id)) id = `${id}-2`;
+        used.add(id);
+        return { id, label: base, path: p };
+      });
+  }
+
   let savingSettings = false;
   async function saveSettings() {
     const body = $('#settingsBody');
@@ -754,7 +783,14 @@
       modes: { vault: eng('vault'), breach: eng('breach') },
       fastModel: eng('fast'),
       jev: { enabled: $('#sJev').checked, apiKey: $('#sJevKey').value.trim(), useInBreach: $('#sJevBreach').checked },
-      memory: { coreNotes: $('#sCore').value.split(',').map((s) => s.trim()).filter(Boolean), logConversations: $('#sLog').checked },
+      memory: {
+        coreNotes: $('#sCore').value.split(',').map((s) => s.trim()).filter(Boolean),
+        extraRoots: extraRootsFromInput($('#sExtra').value),
+        excludeGlobs: $('#sExclude').value.split(',').map((s) => s.trim()).filter(Boolean),
+        maxHits: Number($('#sMaxHits').value) || 5,
+        snippetChars: Number($('#sSnippet').value) || 400,
+        logConversations: $('#sLog').checked,
+      },
       providers: provs,
     };
     $('#settingsMsg').textContent = 'kaydediliyor…';
