@@ -21,6 +21,7 @@
   } catch { /* bozuk kayıt */ }
   let status = null;
   let busy = null;
+  let resolvedModel = '';
 
   const chat = $('#chat');
   const input = $('#input');
@@ -40,12 +41,15 @@
     return getComputedStyle(document.body).getPropertyValue('--accent-rgb').trim();
   }
 
+  function isUrlModel(model) {
+    return Think.isUrlModel(model);
+  }
+
+  function shownModel(model) {
+    return isUrlModel(model) ? '' : (model || '');
+  }
+
   function md(src) {
-    let think = '';
-    src = String(src || '').replace(/<think>([\s\S]*?)(<\/think>|$)/g, (_, t) => {
-      think += t;
-      return '';
-    });
     const blocks = [];
     let s = esc(src.trim());
     s = s.replace(/```[\w-]*\n?([\s\S]*?)(```|$)/g, (_, code) => {
@@ -115,9 +119,7 @@
     flushPara();
     flushList();
     flushTable();
-    let html = out.join('').replace(/\u0000(\d+)\u0000/g, (_, i) => blocks[i]);
-    if (think.trim()) html = `<details class="think"><summary>◇ düşünce süreci</summary><div>${esc(think.trim())}</div></details>` + html;
-    return html;
+    return out.join('').replace(/\u0000(\d+)\u0000/g, (_, i) => blocks[i]);
   }
 
   function scrollDown() {
@@ -170,7 +172,7 @@
     const cfg = status?.config;
     if (!cfg) return;
     const e = cfg.modes[mode];
-    const model = e.model || cfg.providers[e.provider]?.defaultModel;
+    const model = shownModel(e.model || cfg.providers[e.provider]?.defaultModel) || shownModel(resolvedModel);
     const label = live || `${cfg.providers[e.provider]?.label || e.provider}${model ? ` · ${model}` : ''}`;
     $('#engineChip').textContent = `motor: ${label}`;
     $('#engineChip').title = label;
@@ -187,12 +189,24 @@
   }
 
   function paintBubble(bub, streaming) {
-    let html = md(bub.text);
-    if (bub.reasoning && !bub.text.includes('<think>')) {
-      html = `<details class="think"${streaming && !bub.text ? ' open' : ''}><summary>◇ düşünce süreci</summary><div>${esc(bub.reasoning)}</div></details>` + html;
+    const prev = bub.body.querySelector('details.think');
+    const keepOpen = Boolean(prev && prev.open);
+    const scroll = prev?.querySelector('.think-body')?.scrollTop || 0;
+    const view = Think.parts(bub.reasoning, bub.text, { flush: !streaming });
+    const answer = String(view.content || '').trim();
+    let html = answer ? md(view.content) : '';
+    if (view.reasoning.trim()) {
+      const label = streaming && !answer ? '◇ düşünce süreci…' : '◇ düşünce süreci';
+      html = `<details class="think"${keepOpen ? ' open' : ''}><summary title="Düşünce sürecini göster veya kapat"><span class="think-label">${label}</span><span class="think-act"><span class="when-closed">göster</span><span class="when-open">kapat</span></span></summary><div class="think-body">${esc(view.reasoning.trim())}</div></details>` + html;
     }
-    bub.body.innerHTML = html || (streaming ? '' : '<span class="muted">(boş yanıt)</span>');
+    bub.body.innerHTML = html || (streaming || view.pending ? '' : '<span class="muted">(boş yanıt)</span>');
     bub.body.classList.toggle('cursor', Boolean(streaming));
+    const next = bub.body.querySelector('details.think');
+    if (next && keepOpen) {
+      next.open = true;
+      const body = next.querySelector('.think-body');
+      if (body) body.scrollTop = scroll;
+    }
   }
 
   function toolCard(id, name, args, risk) {
@@ -220,9 +234,10 @@
       if (m.role === 'user') {
         chat.appendChild(userBubble(m.display || m.content, m.from, m.atts));
       } else if (m.role === 'assistant') {
-        if (m.content) {
+        if (m.content || m.reasoning) {
           const b = botBubble();
-          b.text = m.content;
+          b.text = m.content || '';
+          b.reasoning = m.reasoning || '';
           paintBubble(b, false);
         }
         for (const tc of m.tool_calls || []) {
@@ -315,7 +330,8 @@
         }
       },
       engine(d) {
-        updateEngineChip(`${status?.config?.providers[d.provider]?.label || d.provider} · ${d.model}`);
+        resolvedModel = shownModel(d.model);
+        updateEngineChip();
       },
       state(d) {
         setOrbState(d.state);
@@ -370,7 +386,8 @@
         if (bubble) paintBubble(bubble, false);
         histories[sendMode].push(...d.messages);
         saveHistories();
-        if (status?.config?.voice?.tts && finalText.trim()) speak(finalText);
+        const spoken = Think.parts(bubble?.reasoning || '', finalText, { flush: true }).content.trim();
+        if (status?.config?.voice?.tts && spoken) speak(spoken);
       },
       error(d) {
         errorMsg = d.message;
@@ -388,7 +405,7 @@
       const res = await fetch('/api/chat', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ mode: sendMode, tier: tier ?? $('#tierSel').value, messages: h.filter((m) => m.role !== 'error').map(({ display, from, atts, ...m }) => m) }),
+        body: JSON.stringify({ mode: sendMode, tier: tier ?? $('#tierSel').value, messages: h.filter((m) => m.role !== 'error').map(({ display, from, atts, reasoning, ...m }) => m) }),
         signal: controller.signal,
       });
       const reader = res.body.getReader();
@@ -421,7 +438,7 @@
       if (!window.speechSynthesis?.speaking) setOrbState('idle');
       updateEngineChip();
       if (bridge) {
-        const reply = finalText.replace(/<think>[\s\S]*?<\/think>/g, '').trim();
+        const reply = Think.parts(bubble?.reasoning || '', finalText, { flush: true }).content.trim();
         await fetch('/api/bridge/reply', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
@@ -552,7 +569,7 @@
   // ---------- ses ----------
   function speak(text) {
     if (!window.speechSynthesis) return;
-    const clean = text.replace(/<think>[\s\S]*?<\/think>/g, '').replace(/```[\s\S]*?```/g, ' kod bloğu ').replace(/[*#`>_\[\]]/g, '').slice(0, 1500);
+    const clean = Think.parts('', text, { flush: true }).content.replace(/```[\s\S]*?```/g, ' kod bloğu ').replace(/[*#`>_\[\]]/g, '').slice(0, 1500);
     const u = new SpeechSynthesisUtterance(clean);
     u.lang = status?.config?.voice?.lang || 'tr-TR';
     const v = speechSynthesis.getVoices().find((x) => x.lang?.startsWith(u.lang.slice(0, 2)));
@@ -668,7 +685,7 @@
     return `<div class="row three" data-engine="${id}">
       <label>${label}</label>
       <select class="eprov">${allowEmpty ? `<option value="" ${!e.provider ? 'selected' : ''}>— ana motor —</option>` : ''}${providerOptions(e.provider)}</select>
-      <input type="text" class="emodel" list="dl-${id}" value="${esc(e.model || '')}" placeholder="boş = sağlayıcının varsayılan modeli" />
+      <input type="text" class="emodel" list="dl-${id}" value="${esc(shownModel(e.model || ''))}" placeholder="boş = sağlayıcının varsayılan modeli" autocomplete="off" spellcheck="false" />
       <button type="button" class="mini elist" title="Modelleri getir" style="width:auto;padding:0 8px">liste</button>
       <datalist id="dl-${id}"></datalist>
     </div>`;
@@ -696,6 +713,7 @@
         ${engineRow('breach', 'B.R.E.A.C.H. motoru', c.modes.breach)}
         ${engineRow('fast', 'Hızlı model (T2)', c.fastModel, true)}
         <p class="hint">B.R.E.A.C.H. için "LM Studio (Yerel)" seçin ve LM Studio'da sansürsüz modeli yükleyip Local Server'ı açın. Model adı boşsa yüklü ilk model kullanılır.</p>
+        ${[['vault', c.modes.vault], ['breach', c.modes.breach], ['fast', c.fastModel]].some(([, e]) => isUrlModel(e?.model)) ? '<p class="hint">Model alanına sunucu adresi yazılmıştı (http://… bu bir model adı değil). Alan boşaltıldı; kaydedince adres silinir ve yüklü model kullanılır. İstersen "liste" ile model adını seç.</p>' : ''}
       </fieldset>
       <fieldset>
         <legend>Jev sınıflandırıcı</legend>
@@ -724,8 +742,9 @@
         btn.textContent = '…';
         const r = await (await fetch(`/api/models?provider=${encodeURIComponent(prov)}`)).json();
         btn.textContent = 'liste';
-        row.querySelector('datalist').innerHTML = r.models.map((m) => `<option value="${esc(m)}"></option>`).join('');
-        $('#settingsMsg').textContent = r.error ? `⚠ ${r.error}` : `${r.models.length} model bulundu — kutuya tıklayıp seçin.`;
+        const models = (r.models || []).filter((m) => !isUrlModel(m));
+        row.querySelector('datalist').innerHTML = models.map((m) => `<option value="${esc(m)}"></option>`).join('');
+        $('#settingsMsg').textContent = r.error ? `⚠ ${r.error}` : `${models.length} model bulundu — kutuya tıklayıp seçin.`;
       };
     });
     $('#settingsMsg').textContent = '';

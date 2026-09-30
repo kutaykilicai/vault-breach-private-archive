@@ -401,9 +401,48 @@ body.has-chat .orb-title { top: 58px; font-size: 13px; }
 .msg .wl { color: var(--accent-2); border-bottom: 1px dotted; }
 .cursor::after { content: '▍'; color: var(--accent); animation: blink 1s steps(1) infinite; }
 
-details.think { margin: 4px 0 8px; font-size: 12.5px; color: var(--muted); }
-details.think summary { cursor: pointer; font-family: var(--mono); letter-spacing: 0.1em; }
-details.think div { white-space: pre-wrap; border-left: 2px solid rgba(var(--accent-rgb), 0.3); padding-left: 10px; margin-top: 4px; max-height: 220px; overflow: auto; }
+details.think {
+  margin: 0 0 8px;
+  border: 1px solid rgba(var(--accent-rgb), 0.35);
+  border-radius: 8px;
+  background: rgba(0, 0, 0, 0.35);
+  color: var(--muted);
+  font-size: 12.5px;
+}
+details.think summary {
+  cursor: pointer;
+  list-style: none;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 7px 10px;
+  font-family: var(--mono);
+  letter-spacing: 0.08em;
+  color: var(--accent-2);
+}
+details.think summary::-webkit-details-marker { display: none; }
+details.think .think-act {
+  flex: none;
+  font-size: 10px;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--accent);
+  border: 1px solid rgba(var(--accent-rgb), 0.5);
+  border-radius: 999px;
+  padding: 2px 8px;
+}
+details.think .when-open { display: none; }
+details.think[open] .when-open { display: inline; }
+details.think[open] .when-closed { display: none; }
+details.think .think-body {
+  white-space: pre-wrap;
+  border-top: 1px solid rgba(var(--accent-rgb), 0.22);
+  padding: 8px 10px 10px;
+  max-height: 160px;
+  overflow: auto;
+  color: var(--muted);
+}
 
 .tool {
   align-self: flex-start;
