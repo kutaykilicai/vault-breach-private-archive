@@ -97,17 +97,24 @@ const TOOLS = [
   {
     name: 'memory_search',
     risk: 'safe',
-    description: 'Obsidian hafızasında (vault) anahtar kelimeyle arama yapar. Kullanıcı hakkında bilgi, geçmiş projeler, notlar için önce bunu kullan.',
+    description:
+      'Obsidian hafızasında (kasa + salt okunur ek kökler) arama yapar. Kullanıcı hakkında bilgi, geçmiş projeler, ' +
+      'notlar için önce bunu kullan. Bulamazsan eş anlamlı ya da daha genel bir kelimeyle bir kez daha dene.',
     parameters: { type: 'object', properties: { query: { type: 'string' } }, required: ['query'] },
     run: async ({ query }) => {
       const hits = memory.search(query, 8);
-      return hits.length ? hits.map((h) => `- [[${h.path}]] (skor ${h.score})\n  ${h.snippet}`).join('\n') : 'Hafızada eşleşme yok.';
+      if (!hits.length) return 'Hafızada eşleşme yok.';
+      return hits
+        .map((h) => `- ${h.path}${h.writable === false ? ' (salt okunur)' : ''} (skor ${h.score})\n  ${h.snippet}`)
+        .join('\n');
     },
   },
   {
     name: 'memory_read',
     risk: 'safe',
-    description: 'Vault içinden bir notu tam olarak okur. path vault köküne göre göreli yol veya not başlığıdır.',
+    description:
+      'Vault içinden bir notu tam olarak okur. path vault köküne göre göreli yol, not başlığı ya da ' +
+      'salt okunur ek kök için "kökAdı:göreli/yol.md" biçimidir (örn: obsidian:Projeler/plan.md).',
     parameters: { type: 'object', properties: { path: { type: 'string' } }, required: ['path'] },
     run: async ({ path: p }) => clip(memory.read(p), 20000),
   },

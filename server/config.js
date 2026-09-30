@@ -2,7 +2,8 @@ const fs = require('fs');
 const path = require('path');
 
 const ROOT = path.resolve(__dirname, '..');
-const CONFIG_PATH = path.join(ROOT, 'config.json');
+// VB_CONFIG_PATH yalnızca testler için: gerçek config.json'a dokunmadan izole bir dosya kullanılır.
+const CONFIG_PATH = process.env.VB_CONFIG_PATH ? path.resolve(process.env.VB_CONFIG_PATH) : path.join(ROOT, 'config.json');
 const MASK = '••••••••';
 
 const DEFAULTS = {
@@ -24,7 +25,19 @@ const DEFAULTS = {
   },
   memory: {
     coreNotes: [],
+    // Her mesaja iliştirilen bağlam bütçesi. Yüzlerce not aranabilir olduğunda tek sınırlayıcı bunlar.
     maxHits: 5,
+    snippetChars: 400,
+    coreChars: 4000,
+    // Arama ayarları. minTokenChars'ı 2'ye düşürmek "iş", "ev" gibi kısa kelimeleri de aranabilir yapar.
+    minTokenChars: 3,
+    maxNoteBytes: 262144,
+    reindexStaleMs: 60000,
+    // Kasanın yanında salt okunur olarak indekslenen ek kökler:
+    // [{ id: "obsidian", label: "Obsidian beyni", path: "I:\\Obsidian_Vault\\Claude_Vault", exclude: ["_arsiv/**"] }]
+    extraRoots: [],
+    // Kasada aramaya girmesin denen yollar (glob). Örn: ["inbox/sohbet-kayitlari/**"]
+    excludeGlobs: [],
     writeFolder: 'inbox',
     logConversations: true,
     logFolder: 'inbox/sohbet-kayitlari',

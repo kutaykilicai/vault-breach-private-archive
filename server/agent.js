@@ -58,10 +58,16 @@ async function systemPrompt(mode, tier, hits) {
   const core = memory.coreContext();
   if (core) parts.push(`## Çekirdek hafıza (her zaman geçerli)\n${core}`);
   if (hits.length) {
+    const readOnly = hits.some((h) => h.writable === false);
     parts.push(
       '## Hafızadan ilgili notlar (Obsidian)\n' +
-        hits.map((h) => `- [[${h.path}]]: ${h.snippet}`).join('\n') +
-        '\nBu notlar ilgiliyse kullan; değilse yok say.'
+        // Salt okunur köklerdeki notlar wikilink olarak verilmez: kasada o adla dosya yok,
+        // model kopyalarsa grafikte kırık bağlantı oluşur.
+        hits.map((h) => `- ${h.writable === false ? `\`${h.path}\`` : `[[${h.path}]]`}: ${h.snippet}`).join('\n') +
+        '\nBu notlar ilgiliyse kullan; değilse yok say.' +
+        (readOnly
+          ? '\nTers tırnak içindeki yollar salt okunur ek hafıza köklerindendir: memory_read ile okunur, memory_write ile yazılamaz ve [[wikilink]] olarak kullanılmaz.'
+          : '')
     );
   }
   if (!memory.vaultRoot()) parts.push('(Not: Obsidian vault henüz bağlanmadı, hafıza boş.)');
