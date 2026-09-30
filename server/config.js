@@ -2,7 +2,8 @@ const fs = require('fs');
 const path = require('path');
 
 const ROOT = path.resolve(__dirname, '..');
-const CONFIG_PATH = path.join(ROOT, 'config.json');
+// VB_CONFIG_PATH yalnızca testler için: gerçek config.json'a dokunmadan izole bir dosya kullanılır.
+const CONFIG_PATH = process.env.VB_CONFIG_PATH ? path.resolve(process.env.VB_CONFIG_PATH) : path.join(ROOT, 'config.json');
 const MASK = '••••••••';
 
 const DEFAULTS = {
