@@ -2,7 +2,8 @@ const fs = require('fs');
 const path = require('path');
 
 const ROOT = path.resolve(__dirname, '..');
-const CONFIG_PATH = path.join(ROOT, 'config.json');
+// VB_CONFIG_PATH yalnızca testler için: gerçek config.json'a dokunmadan izole bir dosya kullanılır.
+const CONFIG_PATH = process.env.VB_CONFIG_PATH ? path.resolve(process.env.VB_CONFIG_PATH) : path.join(ROOT, 'config.json');
 const MASK = '••••••••';
 
 const DEFAULTS = {
@@ -97,17 +98,28 @@ function masked() {
   return c;
 }
 
+// Dolu bir anahtarın boşaltılması her zaman kasıtlı değildir (tarayıcı parola yöneticisi,
+// bozuk gövde, eski istemci). Değeri değil, yalnızca alan adını loglarız.
+function warnCleared(fields) {
+  if (!fields.length) return;
+  console.warn(`[config] dolu anahtar boşaltıldı: ${fields.join(', ')} (istek bu alanları boş gönderdi)`);
+}
+
 function updateFromClient(incoming) {
   const c = JSON.parse(JSON.stringify(get()));
   const merged = deepMerge(c, incoming);
+  const cleared = [];
   for (const [name, p] of Object.entries(merged.providers || {})) {
     if (p.apiKey === MASK) p.apiKey = c.providers[name]?.apiKey || '';
+    if (c.providers[name]?.apiKey && !p.apiKey) cleared.push(`providers.${name}.apiKey`);
     delete p.hasKey;
   }
   if (merged.jev) {
     if (merged.jev.apiKey === MASK) merged.jev.apiKey = c.jev.apiKey;
+    if (c.jev.apiKey && !merged.jev.apiKey) cleared.push('jev.apiKey');
     delete merged.jev.hasKey;
   }
+  warnCleared(cleared);
   return save(merged);
 }
 

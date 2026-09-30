@@ -70,9 +70,11 @@ async function systemPrompt(mode, tier, hits) {
 
 function pickEngine(mode, tier) {
   const cfg = config.get();
-  const main = cfg.modes[mode] || cfg.modes.vault;
-  if (tier === 2 && cfg.fastModel?.provider && providers.isReady(cfg.fastModel.provider)) return cfg.fastModel;
-  return main;
+  if (tier === 2 && cfg.fastModel?.provider && providers.isReady(cfg.fastModel.provider)) {
+    return { ...cfg.fastModel, setting: 'fastModel' };
+  }
+  const key = cfg.modes[mode] ? mode : 'vault';
+  return { ...cfg.modes[key], setting: `modes.${key}` };
 }
 
 /**
@@ -115,7 +117,7 @@ async function run({ messages, mode, tier: forcedTier, emit, signal, requestAppr
 
   const engine = pickEngine(mode, route.tier);
   if (!providers.isReady(engine.provider)) {
-    throw new Error(`"${engine.provider}" sağlayıcısı hazır değil. Ayarlardan API anahtarı girin veya başka motor seçin.`);
+    throw new Error(providers.notReadyMessage(engine.provider, engine.setting));
   }
   emit('engine', { provider: engine.provider, model: engine.model || cfg.providers[engine.provider]?.defaultModel || '(otomatik)' });
 

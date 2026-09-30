@@ -7,6 +7,7 @@ const providers = require('./providers');
 const agent = require('./agent');
 const bridge = require('./bridge');
 const { detectAll } = require('./detect');
+const { readBody } = require('./body');
 
 const WEB = path.join(config.ROOT, 'web');
 const UPLOADS = path.join(config.ROOT, 'data', 'uploads');
@@ -26,24 +27,6 @@ const pendingApprovals = new Map();
 function sendJson(res, code, data) {
   res.writeHead(code, { 'Content-Type': 'application/json; charset=utf-8', 'Cache-Control': 'no-store' });
   res.end(JSON.stringify(data));
-}
-
-function readBody(req) {
-  return new Promise((resolve, reject) => {
-    let data = '';
-    req.on('data', (c) => {
-      data += c;
-      if (data.length > 40 * 1024 * 1024) reject(new Error('İstek çok büyük'));
-    });
-    req.on('end', () => {
-      try {
-        resolve(data ? JSON.parse(data) : {});
-      } catch (e) {
-        reject(e);
-      }
-    });
-    req.on('error', reject);
-  });
 }
 
 function sameOrigin(req) {

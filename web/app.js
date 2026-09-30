@@ -700,16 +700,16 @@
       <fieldset>
         <legend>Jev sınıflandırıcı</legend>
         <div class="row"><label>Jev kullan</label><label><input type="checkbox" id="sJev" ${c.jev.enabled ? 'checked' : ''}/> T2/T3 kararını Jev versin (hata olursa yerel sezgiye düşer)</label></div>
-        <div class="row"><label>FreeJev anahtarı</label><input type="password" id="sJevKey" value="${esc(c.jev.apiKey || '')}" placeholder="sk-freejev-…" /></div>
+        <div class="row"><label>FreeJev anahtarı</label><input type="password" id="sJevKey" autocomplete="off" data-orig="${esc(c.jev.apiKey || '')}" value="${esc(c.jev.apiKey || '')}" placeholder="sk-freejev-…" /></div>
         <div class="row"><label>B.R.E.A.C.H.'te de</label><label><input type="checkbox" id="sJevBreach" ${c.jev.useInBreach ? 'checked' : ''}/> B.R.E.A.C.H. modunda da kullan</label></div>
         <p class="hint">Jev uzak bir servistir: mesajının ilk 2000 karakteri sınıflandırma için freejev.org'a (oradan TypeSafe/OpenRouter'a) gider. Tamamen yerel kalmak istediğin konuşmalar için B.R.E.A.C.H. seçeneğini kapat.</p>
       </fieldset>
       <fieldset>
         <legend>API anahtarları</legend>
         ${Object.entries(c.providers)
-          .map(([k, p]) => `<div class="prov" data-prov="${k}"><b>${esc(p.label || k)}</b><input type="text" class="purl" value="${esc(p.baseUrl)}" title="Adres" /><input type="password" class="pkey" value="${esc(p.apiKey || '')}" placeholder="API anahtarı" /><input type="text" class="pdef" value="${esc(p.defaultModel || '')}" placeholder="varsayılan model" title="Varsayılan model" /></div>`)
+          .map(([k, p]) => `<div class="prov" data-prov="${k}"><b>${esc(p.label || k)}</b><input type="text" class="purl" value="${esc(p.baseUrl)}" title="Adres" /><input type="password" class="pkey" autocomplete="off" data-orig="${esc(p.apiKey || '')}" value="${esc(p.apiKey || '')}" placeholder="API anahtarı" /><input type="text" class="pdef" value="${esc(p.defaultModel || '')}" placeholder="varsayılan model" title="Varsayılan model" /></div>`)
           .join('')}
-        <p class="hint">Anahtarlar sadece bu bilgisayardaki <code>config.json</code> dosyasında durur. Gemini için ücretsiz anahtar: aistudio.google.com. Perplexity API ücretlidir.</p>
+        <p class="hint">Anahtarlar sadece bu bilgisayardaki <code>config.json</code> dosyasında durur. Gemini için ücretsiz anahtar: aistudio.google.com. Perplexity API ücretlidir. Bir anahtarı silmek için kutusunu boşaltıp kaydedin; dokunmadığınız kutular olduğu gibi kalır.</p>
       </fieldset>
       <fieldset>
         <legend>Güvenlik ve ses</legend>
@@ -739,21 +739,28 @@
       const row = body.querySelector(`[data-engine="${id}"]`);
       return { provider: row.querySelector('.eprov').value, model: row.querySelector('.emodel').value.trim() };
     };
+    // Dokunulmamış anahtar kutusunu hiç göndermeyiz: /api/config derin birleştirir, yani
+    // gönderilmeyen alan korunur. Böylece tarayıcı parola yöneticisi kutuyu boşaltsa bile
+    // config.json'daki anahtar silinmez. Kutuyu kullanıcı boşaltırsa boş değer gider ve silinir.
+    const secret = (inp) => (inp.value === inp.dataset.orig ? null : inp.value.trim());
     const provs = {};
     body.querySelectorAll('[data-prov]').forEach((r) => {
-      provs[r.dataset.prov] = {
+      const p = {
         baseUrl: r.querySelector('.purl').value.trim(),
-        apiKey: r.querySelector('.pkey').value.trim(),
         defaultModel: r.querySelector('.pdef').value.trim(),
       };
+      const key = secret(r.querySelector('.pkey'));
+      if (key !== null) p.apiKey = key;
+      provs[r.dataset.prov] = p;
     });
+    const jevKey = secret($('#sJevKey'));
     const payload = {
       vaultPath: $('#sVault').value.trim().replace(/^"|"$/g, ''),
       autoApprove: $('#sAuto').checked,
       voice: { tts: $('#sTts').checked },
       modes: { vault: eng('vault'), breach: eng('breach') },
       fastModel: eng('fast'),
-      jev: { enabled: $('#sJev').checked, apiKey: $('#sJevKey').value.trim(), useInBreach: $('#sJevBreach').checked },
+      jev: { enabled: $('#sJev').checked, useInBreach: $('#sJevBreach').checked, ...(jevKey === null ? {} : { apiKey: jevKey }) },
       memory: { coreNotes: $('#sCore').value.split(',').map((s) => s.trim()).filter(Boolean), logConversations: $('#sLog').checked },
       providers: provs,
     };
