@@ -3,6 +3,7 @@ const crypto = require('crypto');
 const fs = require('fs');
 const path = require('path');
 const config = require('./config');
+const { parts } = require('../web/think');
 
 const DATA = path.join(config.ROOT, 'data');
 const OUTBOX_PATH = path.join(DATA, 'outbox.json');
@@ -67,6 +68,7 @@ async function runHeadless(id, from, text, mode, requestApproval = async () => f
   const hist = headlessHistory[mode];
   hist.push({ role: 'user', content: text });
   let out = '';
+  let why = '';
   let error = null;
   try {
     await agent.run({
@@ -74,6 +76,7 @@ async function runHeadless(id, from, text, mode, requestApproval = async () => f
       mode,
       emit: (ev, d) => {
         if (ev === 'delta') out += d.content;
+        if (ev === 'reasoning') why += d.content;
         if (ev === 'segment' && out && !out.endsWith('\n\n')) out += '\n\n';
         if (ev === 'done') hist.push(...d.messages);
       },
@@ -83,7 +86,8 @@ async function runHeadless(id, from, text, mode, requestApproval = async () => f
   } catch (e) {
     error = e.message;
   }
-  setReply(id, { status: error ? 'error' : 'done', text: error ? `Hata: ${error}` : out.replace(/<think>[\s\S]*?<\/think>/g, '').trim(), headless: true });
+  const answer = parts(why, out, { flush: true }).content.trim();
+  setReply(id, { status: error ? 'error' : 'done', text: error ? `Hata: ${error}` : answer, headless: true });
 }
 
 const SOURCES = {

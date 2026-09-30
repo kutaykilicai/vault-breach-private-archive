@@ -5,6 +5,7 @@ const providers = require('./providers');
 const tools = require('./tools');
 const router = require('./router');
 const { detectAll } = require('./detect');
+const { parts } = require('../web/think');
 
 const MAX_STEPS = 12;
 const ATTACH_MARK = '\n\n📎 EKLER';
@@ -28,8 +29,17 @@ const PERSONAS = {
   },
 };
 
-function stripThink(s) {
-  return (s || '').replace(/<think>[\s\S]*?<\/think>/g, '').trim();
+function visibleReply(reasoning, content) {
+  return parts(reasoning, content, { flush: true });
+}
+
+function toProvider(m) {
+  const { reasoning, display, from, atts, ...rest } = m;
+  if (m.role === 'assistant' && (typeof m.content === 'string' || reasoning)) {
+    const text = visibleReply(reasoning, typeof m.content === 'string' ? m.content : '').content.trim();
+    rest.content = m.tool_calls ? text || null : text;
+  }
+  return rest;
 }
 
 async function systemPrompt(mode, tier, hits) {
@@ -117,10 +127,14 @@ async function run({ messages, mode, tier: forcedTier, emit, signal, requestAppr
   if (!providers.isReady(engine.provider)) {
     throw new Error(`"${engine.provider}" sağlayıcısı hazır değil. Ayarlardan API anahtarı girin veya başka motor seçin.`);
   }
-  emit('engine', { provider: engine.provider, model: engine.model || cfg.providers[engine.provider]?.defaultModel || '(otomatik)' });
+  let model = engine.model;
+  if (!model || providers.isUrlModel(model)) model = cfg.providers[engine.provider]?.defaultModel || '';
+  if (!model || providers.isUrlModel(model)) model = '';
+  model = await providers.resolveModel(engine.provider, model);
+  emit('engine', { provider: engine.provider, model });
 
   const sys = { role: 'system', content: await systemPrompt(mode, route.tier, hits) };
-  const history = messages.filter((m) => m.role !== 'system').slice(-40);
+  const history = messages.filter((m) => m.role !== 'system').slice(-40).map(toProvider);
   const added = [];
   const toolSchemas = route.tier === 3 ? tools.schemas() : undefined;
 
@@ -130,8 +144,8 @@ async function run({ messages, mode, tier: forcedTier, emit, signal, requestAppr
 
     const result = await providers.streamChat({
       provider: engine.provider,
-      model: engine.model,
-      messages: [sys, ...history, ...added],
+      model,
+      messages: [sys, ...history, ...added.map(toProvider)],
       tools: toolSchemas,
       signal,
       onDelta: (d) => {
@@ -140,12 +154,16 @@ async function run({ messages, mode, tier: forcedTier, emit, signal, requestAppr
       },
     });
 
+    const view = visibleReply(result.reasoning, result.content);
     if (!result.toolCalls.length) {
-      added.push({ role: 'assistant', content: stripThink(result.content) });
+      const msg = { role: 'assistant', content: view.content.trim() };
+      if (view.reasoning.trim()) msg.reasoning = view.reasoning.trim();
+      added.push(msg);
       break;
     }
 
-    const callMsg = { role: 'assistant', content: stripThink(result.content) || null, tool_calls: result.toolCalls };
+    const callMsg = { role: 'assistant', content: view.content.trim() || null, tool_calls: result.toolCalls };
+    if (view.reasoning.trim()) callMsg.reasoning = view.reasoning.trim();
     if (engine.provider === 'kimi' && result.reasoning) callMsg.reasoning_content = result.reasoning;
     added.push(callMsg);
     emit('segment', {});

@@ -1,4 +1,5 @@
 const config = require('./config');
+const { parts, isUrlModel } = require('../web/think');
 
 function getProvider(name) {
   const p = config.get().providers[name];
@@ -38,13 +39,14 @@ async function listModels(name, timeoutMs = 4000) {
   return list
     .map((m) => (typeof m === 'string' ? m : m.id || m.name))
     .filter(Boolean)
-    .map((id) => id.replace(/^models\//, ''));
+    .map((id) => id.replace(/^models\//, ''))
+    .filter((id) => !isUrlModel(id));
 }
 
 async function resolveModel(name, model) {
-  if (model) return model;
+  if (model && !isUrlModel(model)) return model;
   const def = config.get().providers[name]?.defaultModel;
-  if (def) return def;
+  if (def && !isUrlModel(def)) return def;
   const models = await listModels(name);
   if (!models.length) throw new Error(`${name} için model bulunamadı. Ayarlardan model seçin (LM Studio'da model yüklü mü?).`);
   return models[0];
@@ -150,8 +152,18 @@ async function streamOnce({ provider, model, messages, tools, signal, onDelta, t
 
 async function complete({ provider, model, messages, signal }) {
   let out = '';
-  await streamChat({ provider, model, messages, signal, onDelta: (d) => { if (d.content) out += d.content; } });
-  return out.replace(/<think>[\s\S]*?<\/think>/g, '').trim();
+  let why = '';
+  await streamChat({
+    provider,
+    model,
+    messages,
+    signal,
+    onDelta: (d) => {
+      if (d.content) out += d.content;
+      if (d.reasoning) why += d.reasoning;
+    },
+  });
+  return parts(why, out, { flush: true }).content.trim();
 }
 
-module.exports = { listModels, streamChat, complete, isReady, resolveModel };
+module.exports = { listModels, streamChat, complete, isReady, resolveModel, isUrlModel };
