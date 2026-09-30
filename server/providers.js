@@ -6,11 +6,16 @@ function getProvider(name) {
   return p;
 }
 
+function apiKeyOf(p) {
+  return String(p?.apiKey ?? '').trim();
+}
+
 function headers(p, name) {
   const h = { 'Content-Type': 'application/json' };
-  if (p.apiKey) h.Authorization = `Bearer ${p.apiKey}`;
-  if (name === 'anthropic' && p.apiKey) {
-    h['x-api-key'] = p.apiKey;
+  const key = apiKeyOf(p);
+  if (key) h.Authorization = `Bearer ${key}`;
+  if (name === 'anthropic' && key) {
+    h['x-api-key'] = key;
     h['anthropic-version'] = '2023-06-01';
   }
   if (name === 'openrouter') {
@@ -23,7 +28,27 @@ function headers(p, name) {
 function isReady(name) {
   const p = config.get().providers[name];
   if (!p) return false;
-  return name === 'local' || Boolean(p.apiKey);
+  return name === 'local' || Boolean(apiKeyOf(p));
+}
+
+function readyProviders() {
+  const provs = config.get().providers;
+  return Object.keys(provs).filter(isReady);
+}
+
+/** Hangi ayarın bu motoru seçtiğini ve hangi sağlayıcıların hazır olduğunu söyleyen hata metni. */
+function notReadyMessage(name, setting) {
+  const provs = config.get().providers;
+  const where = setting ? ` Bu motoru \`${setting}\` ayarı seçiyor.` : '';
+  if (!provs[name]) {
+    return `"${name}" diye bir sağlayıcı yok.${where} Ayarlar ⚙ › Motorlar bölümünden geçerli bir motor seçin.`;
+  }
+  const ready = readyProviders().map((n) => `${provs[n].label || n} (${n})`);
+  return (
+    `"${provs[name].label || name}" (${name}) sağlayıcısı hazır değil: \`providers.${name}.apiKey\` boş.${where} ` +
+    'Ayarlar ⚙ › API anahtarları bölümünden anahtarı girin ya da hazır bir motor seçin. ' +
+    `Şu an hazır olanlar: ${ready.length ? ready.join(', ') : 'yok'}.`
+  );
 }
 
 async function listModels(name, timeoutMs = 4000) {
@@ -154,4 +179,4 @@ async function complete({ provider, model, messages, signal }) {
   return out.replace(/<think>[\s\S]*?<\/think>/g, '').trim();
 }
 
-module.exports = { listModels, streamChat, complete, isReady, resolveModel };
+module.exports = { listModels, streamChat, complete, isReady, readyProviders, notReadyMessage, resolveModel };
