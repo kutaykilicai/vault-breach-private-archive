@@ -11,7 +11,22 @@ const fs = require('fs');
 const path = require('path');
 
 const KONULAR = [
-  { klasor: 'Projeler', ad: 'VAULT-BREACH Mimarisi', etiketler: ['proje', 'yazılım'], govde: 'Yerel ajan arayüzü. Node ile yazıldı, harici paket yok. Hafıza Obsidian kasasında duruyor.\n\nİlgili: [[Hafıza Tasarımı]], [[Kasa Donanımı]]' },
+  {
+    klasor: 'Projeler',
+    ad: 'VAULT-BREACH Mimarisi',
+    etiketler: ['proje', 'yazılım'],
+    govde:
+      'Yerel ajan arayüzü. Node ile yazıldı, harici paket yok. Hafıza Obsidian kasasında duruyor.\n\n' +
+      'İlgili: [[Hafıza Tasarımı]], [[Kasa Donanımı]]\n' +
+      'Klasör önekli ve küçük harfli bağlantı: [[projeler/hafıza tasarımı]]\n' +
+      'Takma ad üzerinden bağlantı: [[bellek tasarımı|belleğe bak]]\n' +
+      'Windows’ta geçersiz karakterli hedefe bağlantı: [[Rapor: 2026 Q1]]\n' +
+      'Başlığa bağlantı: [[Isınma Sorunu#Fan]]\n' +
+      'Gömülü dosya: ![[sema.png]]\n' +
+      '%%Bu bir Obsidian yorumu, dışa çıkmamalı.%%\n' +
+      '```dataview\nLIST FROM #proje\n```\n' +
+      'Blok kimliği testi. ^abc12345',
+  },
   { klasor: 'Projeler', ad: 'Hafıza Tasarımı', etiketler: ['proje', 'hafıza'], govde: 'Hafıza aramasının Türkçe çekim eklerini tolere etmesi gerekiyor. Sorgu "hafızamda ne var" olduğunda "hafıza" notları bulunmalı.\n\nBağlantı: [[VAULT-BREACH Mimarisi|mimari]]' },
   { klasor: 'Donanım', ad: 'Kasa Donanımı', etiketler: ['donanım'], govde: 'Ev kasası: Ryzen 7 5700X3D, 32 GB RAM, RX 6700 XT ekran kartı. LM Studio Vulkan motoruyla çalışıyor.\n\nIşık ayarları ve ısınma sorunu ayrı notta: [[Isınma Sorunu]]' },
   { klasor: 'Donanım', ad: 'Isınma Sorunu', etiketler: ['donanım', 'sorun'], govde: 'Yaz aylarında kasa ısınıyor. Işıklar açıkken sıcaklık 78 dereceye çıkıyor. Fan eğrisi düzeltildi.' },
@@ -20,6 +35,18 @@ const KONULAR = [
   { klasor: 'Wiki', ad: 'Türkçe Arama Notları', etiketler: ['bilgi', 'dil'], govde: 'Türkçe eklemeli bir dildir. "çiğ", "şığ", "ığdır" gibi kelimeler ASCII katlamada i/s/g/c/o/u’ya iner. Büyük I küçüldüğünde ı olur; bu yüzden ASCII katlama şart.' },
   { klasor: 'Wiki', ad: 'Obsidian Kullanımı', etiketler: ['bilgi', 'obsidian'], govde: 'Klasör adları ve etiketler aramayı etkilemez; arama yalnızca dosya içeriğine bakar. Bu yüzden anahtar kelimeler metnin içinde geçmelidir.\n\nGrafik için [[Türkçe Arama Notları]] bağlantısı gerekir.' },
   { klasor: 'Fikirler', ad: 'Sesli Asistan Fikri', etiketler: ['fikir'], govde: 'Mikrofonla konuşup ajana iş verme. Tarayıcı konuşma tanıma API’si yeterli olabilir. Türkçe desteği test edilmeli.' },
+  {
+    // Hassas klasörde DEĞİL: aktarılmalı ama içindeki sırlar maskelenmeli.
+    klasor: 'Notlar',
+    ad: 'Karisik Kurulum Notu',
+    etiketler: ['kurulum'],
+    govde:
+      'LM Studio kurulumu tamamlandı. Sunucu http://localhost:1234 üzerinde.\n' +
+      'Deneme anahtarı: sk-or-v1-abc123def456abc123def456abc123def456abc123def456\n' +
+      'Bana ulaşmak için ornek.kisi@ornek-alan.com yazabilirsin.\n' +
+      'Telefon: 0532 444 55 66\n' +
+      'Kalan adımlar: Vulkan motorunu seç, bağlam uzunluğunu 32768 yap.',
+  },
   { klasor: 'Fikirler', ad: 'Akşam Rutini', etiketler: ['fikir', 'rutin'], govde: 'Her akşam gelen kutusundaki notları işleyip arşive taşıyan bir betik. İşlenen dosyalar processed klasörüne gider.' },
 ];
 
