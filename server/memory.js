@@ -60,13 +60,18 @@ function extraRoots() {
     let unique = id;
     for (let i = 2; seen.has(unique); i++) unique = `${id}-${i}`;
     seen.add(unique);
+    // Ek kökler ham Obsidian klasörleri: iş/müşteri/mail/gizli yolları varsayılan olarak
+    // aramaya girmez, yoksa bir soru bu içeriği bulut modele taşır. includeSensitive: true
+    // ile bilinçli olarak kapatılabilir.
+    const own = Array.isArray(src.exclude) ? src.exclude : [];
     out.push({
       id: unique,
       label: String(src.label || src.path),
       configured: src.path,
       path: fs.existsSync(src.path) ? path.resolve(src.path) : '',
       writable: false,
-      exclude: Array.isArray(src.exclude) ? src.exclude : [],
+      sensitiveFiltered: src.includeSensitive !== true,
+      exclude: src.includeSensitive === true ? own : [...text.SENSITIVE_GLOBS, ...own],
     });
   }
   return out;
@@ -450,6 +455,7 @@ function stats() {
       configured: r.configured,
       path: r.path,
       writable: r.writable,
+      sensitiveFiltered: Boolean(r.sensitiveFiltered),
       missing: Boolean(r.configured && !r.path),
       notes: r.notes || 0,
     })),

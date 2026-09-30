@@ -166,6 +166,9 @@ function parseInlineTags(body) {
  */
 function cleanText(body) {
   return String(body ?? '')
+    .replace(/%%[\s\S]*?%%/g, ' ')
+    .replace(/```(?:dataview|dataviewjs|query|tasks)[\s\S]*?(?:```|$)/gi, ' ')
+    .replace(/(?:^|\s)\^[A-Za-z0-9-]{4,}\s*$/gm, ' ')
     .replace(/```[\s\S]*?(?:```|$)/g, (b) => ` ${b.replace(/```[^\n]*/g, ' ')} `)
     .replace(/!?\[\[([^\]|#^]+)(?:[#^][^\]|]*)?(?:\|([^\]]*))?\]\]/g, (_, t, l) => ` ${t.split('/').pop()} ${l || ''} `)
     .replace(/!\[([^\]]*)\]\([^)]*\)/g, ' $1 ')
@@ -225,9 +228,26 @@ function matchesAny(relPath, patterns) {
   });
 }
 
+// Hassas kabul edilen yollar. fold() ı→i, ş→s, ü→u çevirdiği için "İş", "iş", "Is" hepsi
+// "is" kalıbına düşer. Hem içe aktarıcı hem de salt okunur ek kökler bu listeyi kullanır:
+// ek kökler ham Obsidian klasörleri olduğu için içlerindeki iş/müşteri/mail notları
+// aranabilir olmamalı — yoksa bir sorgu bu içeriği bulut modele gönderir.
+const SENSITIVE_GLOBS = [
+  '**/is/**', '**/isler/**', '**/work/**', '**/isyeri/**',
+  '**/musteri*/**', '**/customer*/**', '**/client*/**', '**/cari*/**',
+  '**/mail*/**', '**/e-posta*/**', '**/eposta*/**', '**/email*/**', '**/inbox-mail*/**',
+  '**/gizli*/**', '**/secret*/**', '**/private*/**', '**/ozel-gizli*/**',
+  '**/fatura*/**', '**/invoice*/**', '**/banka*/**', '**/finans*/**', '**/muhasebe*/**',
+  '**/kimlik*/**', '**/anahtar*/**', '**/credential*/**', '**/keys/**', '**/vault-keys/**',
+  '**/*anahtar*.md', '**/*sifre*.md', '**/*parola*.md', '**/*password*.md', '**/*token*.md',
+  '**/*api-key*.md', '**/*apikey*.md', '**/*credential*.md', '**/*musteri*.md', '**/*fatura*.md',
+  '**/*iban*.md', '**/*mail-dokum*.md', '**/*gizli*.md',
+];
+
 module.exports = {
   fold,
   stem,
+  SENSITIVE_GLOBS,
   tokenize,
   queryTerms,
   cleanText,

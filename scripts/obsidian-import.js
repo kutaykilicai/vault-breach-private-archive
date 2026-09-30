@@ -149,18 +149,8 @@ const REDACTIONS = [
   ['posta-başlığı', /^[ \t]*(?:From|To|Cc|Bcc|Subject|Received|Return-Path|Message-ID|Reply-To|Kimden|Kime|Konu|Alıcı|Gönderen)[ \t]*:.*$/gim],
 ];
 
-const DEFAULT_SKIP_PATHS = [
-  // fold() ı→i, ş→s, ü→u çevirdiği için "İş", "iş", "Is" hepsi "is" kalıbına düşer.
-  '**/is/**', '**/isler/**', '**/work/**', '**/isyeri/**',
-  '**/musteri*/**', '**/customer*/**', '**/client*/**', '**/cari*/**',
-  '**/mail*/**', '**/e-posta*/**', '**/eposta*/**', '**/email*/**', '**/inbox-mail*/**',
-  '**/gizli*/**', '**/secret*/**', '**/private*/**', '**/ozel-gizli*/**',
-  '**/fatura*/**', '**/invoice*/**', '**/banka*/**', '**/finans*/**', '**/muhasebe*/**',
-  '**/kimlik*/**', '**/anahtar*/**', '**/credential*/**', '**/keys/**', '**/vault-keys/**',
-  '**/*anahtar*.md', '**/*sifre*.md', '**/*parola*.md', '**/*password*.md', '**/*token*.md',
-  '**/*api-key*.md', '**/*apikey*.md', '**/*credential*.md', '**/*musteri*.md', '**/*fatura*.md',
-  '**/*iban*.md', '**/*mail-dokum*.md', '**/*gizli*.md',
-];
+// Salt okunur ek köklerle aynı liste (server/text.js), tek kaynaktan.
+const DEFAULT_SKIP_PATHS = text.SENSITIVE_GLOBS;
 
 function redact(body) {
   let out = body;
@@ -236,7 +226,7 @@ function convert({ raw, sourceRel, linkMap, maxRedactions }) {
     .replace(/^\s*#\s+(.+?)\s*$/m, (whole, h1) => (text.fold(h1) === text.fold(note.title || fileTitle) ? '' : whole))
     .replace(/%%[\s\S]*?%%/g, '')
     .replace(/^```(?:dataview|dataviewjs|query|tasks)[\s\S]*?```$/gim, '')
-    .replace(/\s\^[A-Za-z0-9-]{4,}\s*$/gm, '')
+    .replace(/(?:^|\s)\^[A-Za-z0-9-]{4,}\s*$/gm, '')
     .replace(/!\[\[([^\]|#^]+)(?:[#^][^\]|]*)?(?:\|[^\]]*)?\]\]/g, (_, t) => `(ek: ${t.trim()})`)
     .replace(/\r\n/g, '\n');
 

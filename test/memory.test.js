@@ -61,10 +61,24 @@ test('.obsidian klasörü atlanır, iki kök birlikte indekslenir', () => {
   const s = memory.stats();
   const obsidian = s.roots.find((r) => r.id === 'obsidian');
   const vault = s.roots.find((r) => r.id === 'vault');
-  assert.equal(obsidian.notes, 70, 'sahte vault 70 not (gizli .obsidian notu hariç)');
+  // 70 dosyanın 3'ü hassas klasörde (Is, Gizli, Mail), 1'i .obsidian altında.
+  assert.equal(obsidian.notes, 67);
   assert.equal(vault.notes, 2);
-  assert.equal(s.notes, 72);
+  assert.equal(s.notes, 69);
   assert.ok(!memory.search('gizli anahtar', 10).some((h) => h.path.includes('.obsidian')));
+});
+
+test('ek köklerde hassas klasörler aranabilir değil', () => {
+  setup();
+  const gizli = memory.search('müşteri IBAN sipariş tutarı', 20).concat(memory.search('openrouter gemini anahtarı', 20));
+  for (const h of gizli) assert.ok(!/(^|:)(Is|Gizli|Mail)\//.test(h.path), `sızan yol: ${h.path}`);
+  assert.equal(memory.stats().roots.find((r) => r.id === 'obsidian').sensitiveFiltered, true);
+
+  // includeSensitive ile bilinçli olarak açılabilir.
+  setup({ extraRoots: [{ id: 'obsidian', path: FIXTURE, includeSensitive: true }] });
+  const acik = memory.stats().roots.find((r) => r.id === 'obsidian');
+  assert.equal(acik.notes, 70);
+  assert.equal(acik.sensitiveFiltered, false);
 });
 
 test('ASCII yazım Türkçe notu bulur (I/ı, İ/i katlaması)', () => {

@@ -45,9 +45,15 @@
 
 ## Hafıza (Obsidian)
 
+Ayrıntılı anlatım, kasada atılacak adımlar ve önerilen ayarlar: **[HAFIZA.md](HAFIZA.md)**.
+
 - `vault-template/` klasörü yeni beyin için örnek bir iskelet içerir: `_beyin/`, `inbox/`, `projects/`, `wiki/`. İstersen içeriğini kendi vault'una kopyala.
-- Her mesajda vault'ta anahtar kelime araması yapılır ve en ilgili notlar modele verilir. Eşleşen notlar sağ panelde listelenir ve grafikte parlar.
-- Ajan `memory_write` aracıyla vault'a not yazabilir. Sohbetler `inbox/sohbet-kayitlari/YYYY-MM-DD.md` dosyasına günlük olarak kaydedilir (Ayarlar'dan kapatılabilir).
+- Her mesajda vault'ta arama yapılır ve en ilgili notlar modele verilir. Eşleşen notlar sağ panelde listelenir ve grafikte parlar.
+- Arama Türkçe'ye göre çalışır: ASCII yazsan da bulur (`hafiza` → `hafıza`, `Istanbul` → `İstanbul`), çekim eklerini tolere eder (`projelerimi` → `proje`), uzun dosyalar kısa ve isabetli notları ezmez. Dosya adı, frontmatter `title`/`aliases`, etiketler, klasör adları ve `[[bağlantı]]` hedefleri de aranabilir metnin parçasıdır.
+- **Ek hafıza kökleri** (Ayarlar › Hafıza): kasanın yanında salt okunur indekslenen başka klasörler. Obsidian beynini Drive'a kopyalamadan aranabilir yapmanın yolu budur; ajan bu köklere yazamaz. `iş`, `müşteri`, `mail`, `gizli` gibi klasörler güvenlik için otomatik dışarıda bırakılır.
+- **Arama bütçesi** (Ayarlar › Hafıza): soru başına not sayısı ve not başına karakter. Kodda sabit sayı yok.
+- Obsidian beynini kasaya aktarmak için `hafiza-aktar.bat` (çift tıkla) ya da `node scripts\obsidian-import.js --help`. Obsidian tarafı salt okunurdur.
+- Ajan `memory_write` aracıyla vault'a not yazabilir. Klasörsüz verilen not adları `memory.writeFolder` (varsayılan `inbox`) altına düşer. Sohbetler `inbox/sohbet-kayitlari/YYYY-MM-DD.md` dosyasına günlük olarak kaydedilir (Ayarlar'dan kapatılabilir).
 - Beceriler (sol paneldeki düğmeler) iki yerden yüklenir: bu projedeki `skills/<ad>/SKILL.md` dosyaları ve vault'taki `skills/` klasörü. Yeni bir beceri eklemek için aynı formatta bir dosya oluşturman yeterli.
 
 ## Yönlendirme (Jev benzeri)
@@ -99,6 +105,16 @@ CLI'ların hangi argümanlarla çağrılacağı `config.json` içindeki `clis` b
 ```
 
 Kimi ve Grok CLI'larının etkileşimsiz çalıştırma argümanları sürümden sürüme değişebilir. Çalışmazsa `kimi --help` çıktısına bakıp şablonu düzelt.
+
+## Testler
+
+```
+npm test
+```
+
+Node'un kendi test koşucusunu kullanır, harici paket gerektirmez. Hafıza indeksi, Türkçe eşleştirme
+ve Obsidian içe aktarıcısı, `scripts/make-fixture.js` ile üretilen sentetik bir Obsidian vault
+üzerinde doğrulanır.
 
 ## Kısayollar
 
