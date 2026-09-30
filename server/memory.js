@@ -23,7 +23,7 @@ let index = emptyIndex();
 let noteCache = new Map(); // abs → { mtime, size, note }
 
 function emptyIndex() {
-  return { roots: [], notes: [], byRef: new Map(), dict: new Map(), avgdl: 1, builtAt: 0, tookMs: 0, signature: '' };
+  return { roots: [], notes: [], dict: new Map(), avgdl: 1, builtAt: 0, tookMs: 0, signature: '' };
 }
 
 function mem() {
@@ -77,9 +77,9 @@ function extraRoots() {
   return out;
 }
 
-function roots() {
+function vaultRootObject() {
   const configured = config.get().vaultPath || '';
-  const vault = {
+  return {
     id: 'vault',
     label: 'Kasa (Drive)',
     configured,
@@ -87,11 +87,15 @@ function roots() {
     writable: true,
     exclude: Array.isArray(mem().excludeGlobs) ? mem().excludeGlobs : [],
   };
-  return [vault, ...extraRoots()];
 }
 
+function roots() {
+  return [vaultRootObject(), ...extraRoots()];
+}
+
+// Sık çağrılır (sistem istemi, sohbet kaydı, beceri listesi): ek kökleri boşuna çözmesin.
 function vaultRoot() {
-  return roots()[0].path;
+  return vaultRootObject().path;
 }
 
 function rootById(id) {
@@ -216,9 +220,7 @@ function build(force = false) {
   }
 
   const dict = new Map();
-  const byRef = new Map();
   notes.forEach((note, i) => {
-    byRef.set(note.ref, note);
     for (const [term, tf] of note.terms) {
       let entry = dict.get(term);
       if (!entry) dict.set(term, (entry = { df: 0, posting: [] }));
@@ -231,7 +233,6 @@ function build(force = false) {
   index = {
     roots: activeRoots,
     notes,
-    byRef,
     dict,
     avgdl: notes.length ? notes.reduce((s, n) => s + n.dl, 0) / notes.length : 1,
     builtAt: Date.now(),
@@ -335,7 +336,7 @@ function resolveRef(ref) {
     const root = rootById(text.fold(m[1]));
     if (root && root.id !== 'vault') return { root, rel: m[2].replace(/^\/+/, '') };
   }
-  return { root: roots()[0], rel: s.replace(/^\/+/, '') };
+  return { root: vaultRootObject(), rel: s.replace(/^\/+/, '') };
 }
 
 function read(rel) {
@@ -488,4 +489,4 @@ function listSkills() {
   return [...skills.values()];
 }
 
-module.exports = { build, search, read, write, coreContext, logExchange, graph, stats, listSkills, vaultRoot, roots, resolveRef };
+module.exports = { build, search, read, write, coreContext, logExchange, graph, stats, listSkills, vaultRoot };
