@@ -170,13 +170,22 @@ function coreContext() {
 
 function logExchange(mode, userText, assistantText) {
   const m = config.get().memory;
-  if (!m.logConversations || !vaultRoot() || !assistantText) return;
+  const breach = mode === 'breach';
+  if (!m.logConversations || (!breach && !vaultRoot()) || !assistantText) return;
   const d = new Date();
   const day = d.toISOString().slice(0, 10);
   const time = d.toTimeString().slice(0, 5);
-  const agent = mode === 'breach' ? 'B.R.E.A.C.H.' : 'V.A.U.L.T.';
+  const agent = breach ? 'B.R.E.A.C.H.' : 'V.A.U.L.T.';
   const entry = `\n## ${time} · ${agent}\n**Ben:** ${userText.trim()}\n\n**${agent}:** ${assistantText.trim()}\n`;
   try {
+    if (breach) {
+      // B.R.E.A.C.H. kayıtları Drive'a gitmez; yerel, git-ignore'lu klasöre yazılır.
+      const full = path.join(config.ROOT, 'data', 'breach-logs', `${day}.md`);
+      fs.mkdirSync(path.dirname(full), { recursive: true });
+      if (!fs.existsSync(full)) fs.writeFileSync(full, `# Sohbet kaydı ${day}\n#sohbet-kaydı\n`, 'utf8');
+      fs.appendFileSync(full, `\n${entry}`, 'utf8');
+      return;
+    }
     const rel = `${m.logFolder}/${day}.md`;
     const full = safeVaultPath(rel);
     if (!fs.existsSync(full)) write(rel, `# Sohbet kaydı ${day}\n#sohbet-kaydı\n`);

@@ -32,7 +32,7 @@ function stripThink(s) {
   return (s || '').replace(/<think>[\s\S]*?<\/think>/g, '').trim();
 }
 
-async function systemPrompt(mode, tier, hits) {
+async function systemPrompt(mode, tier, hits, engineLabel) {
   const persona = PERSONAS[mode] || PERSONAS.vault;
   const now = new Date();
   const parts = [
@@ -50,6 +50,7 @@ async function systemPrompt(mode, tier, hits) {
         '- Kullanıcı hakkında bir şey bilmen gerekiyorsa önce memory_search kullan.\n' +
         '- Kalıcı değeri olan bilgileri, raporları ve kararları memory_write ile vault\'a kaydet ([[wikilink]] kullan).\n' +
         '- Riskli araçlar (komut, dosya yazma, program açma, CLI) kullanıcı onayından geçer; reddedilirse başka yol öner.\n' +
+        "- Kullanıcı senden kendini/kendi kodunu değiştirmeni isterse ('kendine X ekle', 'kendini güncelle') self_update aracını çağır ve isteği task'a net yaz; her zaman onay ister, kod kontrol edilir ve gerekirse sunucu yeniden başlar.\n" +
         "- Kullanıcının Grok Bot'u ile köprün var: Grok Bot'a kendiliğinden bir şey iletmen gerekirse message_grok kullan. Mesaj Grok Bot'tan geldiyse cevabın ona otomatik gider.\n" +
         `- Kurulu AI CLI'lar: ${clis.length ? clis.join(', ') : 'yok'}. Danışılabilecek bulut modeller: ${ext.length ? ext.join(', ') : 'yok'}.`
     );
@@ -65,12 +66,14 @@ async function systemPrompt(mode, tier, hits) {
     );
   }
   if (!memory.vaultRoot()) parts.push('(Not: Obsidian vault henüz bağlanmadı, hafıza boş.)');
+  if (engineLabel) parts.push(`## Şu anki motor (kesin bilgi)\nŞu an seni çalıştıran model: ${engineLabel}. Hafızadaki notlar başka bir model adı söylese bile gerçek olan budur; hangi model olduğun sorulursa bunu söyle.`);
   return parts.join('\n\n');
 }
 
 function pickEngine(mode, tier) {
   const cfg = config.get();
   const main = cfg.modes[mode] || cfg.modes.vault;
+  if (mode === 'breach') return main;
   if (tier === 2 && cfg.fastModel?.provider && providers.isReady(cfg.fastModel.provider)) return cfg.fastModel;
   return main;
 }
@@ -79,7 +82,7 @@ function pickEngine(mode, tier) {
  * emit(event, data) ile arayüze akış gönderir.
  * requestApproval(tool, args) → Promise<boolean>
  */
-async function run({ messages, mode, tier: forcedTier, emit, signal, requestApproval }) {
+async function run({ messages, mode, tier: forcedTier, emit, signal, requestApproval, headless = false }) {
   const cfg = config.get();
   const lastUser = [...messages].reverse().find((m) => m.role === 'user');
   const fullText = typeof lastUser?.content === 'string' ? lastUser.content : '';
@@ -93,17 +96,24 @@ async function run({ messages, mode, tier: forcedTier, emit, signal, requestAppr
     let answer = route.answer;
     if (route.action) {
       const { tool: name, args } = route.action;
+      const tool = tools.byName.get(name);
       const id = `t1_${Date.now()}`;
-      emit('tool_start', { id, name, args, risk: 'safe' });
+      emit('tool_start', { id, name, args, risk: tool.risk === 'always' ? 'always' : 'safe' });
       let output;
+      if (tool.risk === 'always') {
+        emit('state', { state: 'waiting' });
+        if (!(await requestApproval(id, name, args))) output = 'Reddedildi; hiçbir şey değiştirilmedi.';
+        else emit('state', { state: 'working' });
+      }
       try {
-        output = String(await tools.byName.get(name).run(args, { signal, mode }));
+        output ??= String(await tool.run(args, { signal, mode, headless }));
       } catch (e) {
         output = `Hata: ${e.message}`;
       }
-      const ok = !output.startsWith('Hata');
+      const ok = !output.startsWith('Hata') && !output.startsWith('Reddedildi');
       emit('tool_end', { id, name, output, ok });
-      if (!ok) answer = `Açılamadı: ${output}`;
+      if (!ok) answer = route.answer ? `Açılamadı: ${output}` : output;
+      else answer ??= output;
     }
     emit('delta', { content: answer });
     emit('done', { messages: [{ role: 'assistant', content: answer }] });
@@ -119,7 +129,7 @@ async function run({ messages, mode, tier: forcedTier, emit, signal, requestAppr
   }
   emit('engine', { provider: engine.provider, model: engine.model || cfg.providers[engine.provider]?.defaultModel || '(otomatik)' });
 
-  const sys = { role: 'system', content: await systemPrompt(mode, route.tier, hits) };
+  const sys = { role: 'system', content: await systemPrompt(mode, route.tier, hits, `${engine.provider} · ${engine.model || cfg.providers[engine.provider]?.defaultModel || 'otomatik'}`) };
   const history = messages.filter((m) => m.role !== 'system').slice(-40);
   const added = [];
   const toolSchemas = route.tier === 3 ? tools.schemas() : undefined;
@@ -162,7 +172,7 @@ async function run({ messages, mode, tier: forcedTier, emit, signal, requestAppr
       emit('tool_start', { id: call.id, name: call.function.name, args, risk: tool?.risk || 'unknown' });
 
       if (!output && !tool) output = `Hata: bilinmeyen araç "${call.function.name}".`;
-      if (!output && tool.risk === 'risky' && !cfg.autoApprove) {
+      if (!output && (tool.risk === 'always' || (tool.risk === 'risky' && !cfg.autoApprove))) {
         emit('state', { state: 'waiting' });
         const ok = await requestApproval(call.id, tool.name, args);
         if (!ok) output = 'Kullanıcı bu işlemi REDDETTİ. Başka bir yol öner veya kullanıcıya sor.';
@@ -170,7 +180,7 @@ async function run({ messages, mode, tier: forcedTier, emit, signal, requestAppr
       if (!output) {
         emit('state', { state: 'working' });
         try {
-          output = await tool.run(args, { signal, mode });
+          output = await tool.run(args, { signal, mode, headless });
         } catch (e) {
           output = `Hata: ${e.message}`;
         }

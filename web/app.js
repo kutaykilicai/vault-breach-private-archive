@@ -196,7 +196,7 @@
   }
 
   function toolCard(id, name, args, risk) {
-    const d = el('details', `tool ${risk === 'risky' ? 'risky' : ''}`);
+    const d = el('details', `tool ${risk === 'risky' || risk === 'always' ? 'risky' : ''}`);
     d.dataset.id = id;
     const argText = typeof args === 'string' ? args : JSON.stringify(args);
     d.innerHTML = `<summary><span class="tst">⟳</span><span class="tname">${esc(name)}</span><span class="targ">${esc(argText)}</span></summary><pre class="tout">${esc(argText)}</pre>`;
@@ -349,7 +349,11 @@
       approval(d) {
         const card = cards.get(d.id) || toolCard(d.id, d.tool, d.args, 'risky');
         card.open = true;
-        const box = el('div', 'approval', `<span>⚠ <b>${esc(d.tool)}</b> çalıştırılsın mı?</span><button type="button" class="yes">Onayla</button><button type="button" class="no">Reddet</button>`);
+        const self = d.tool === 'self_update';
+        const q = self
+          ? `⚠ <b>Kendi kodunu değiştirecek</b> (otomatik onay açık olsa da sorulur):<br><i>${esc(d.args?.task || '')}</i><br>Onaylıyor musun?`
+          : `⚠ <b>${esc(d.tool)}</b> çalıştırılsın mı?`;
+        const box = el('div', 'approval', `<span>${q}</span><button type="button" class="yes">Onayla</button><button type="button" class="no">Reddet</button>`);
         const answer = async (allow) => {
           box.querySelectorAll('button').forEach((b) => (b.disabled = true));
           await fetch('/api/approve', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ id: d.id, allow }) });
@@ -531,6 +535,23 @@
 
   function connectEvents() {
     const es = new EventSource('/api/events');
+    let lost = false;
+    let restartWeb = false;
+    es.onerror = () => {
+      if (!lost) activity('sunucu bağlantısı koptu, yeniden bağlanılıyor…', '!');
+      lost = true;
+    };
+    es.addEventListener('hello', () => {
+      if (!lost) return;
+      lost = false;
+      activity(`sunucu <b>yeniden başlatıldı</b>, bağlantı geri geldi${restartWeb ? ' — arayüz değişti, Ctrl+F5 ile yenileyin' : ''}`, '↻');
+      restartWeb = false;
+      refreshStatus(false).catch(() => {});
+    });
+    es.addEventListener('restarting', (e) => {
+      restartWeb = JSON.parse(e.data).web;
+      activity('kod güncellendi, sunucu yeniden başlatılıyor…', '↻');
+    });
     es.addEventListener('bridge_in', (e) => {
       const m = JSON.parse(e.data);
       activity(`<b>${esc(m.label)}</b> mesaj gönderdi`, '⇄');

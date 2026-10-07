@@ -79,6 +79,7 @@ async function runHeadless(id, from, text, mode, requestApproval = async () => f
       },
       signal: new AbortController().signal,
       requestApproval,
+      headless: true,
     });
   } catch (e) {
     error = e.message;

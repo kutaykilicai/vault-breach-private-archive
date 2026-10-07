@@ -7,6 +7,7 @@ const memory = require('./memory');
 const providers = require('./providers');
 const { which } = require('./detect');
 const bridge = require('./bridge');
+const selfedit = require('./selfedit');
 
 const isWin = process.platform === 'win32';
 const MAX_OUT = 12000;
@@ -22,15 +23,16 @@ function expandPath(p) {
   return path.resolve(p);
 }
 
-function runProcess(cmd, args, { cwd, timeout = 120000, shell = false } = {}) {
+function runProcess(cmd, args, { cwd, timeout = 120000, shell = false, signal } = {}) {
   return new Promise((resolve) => {
-    const child = spawn(cmd, args, { cwd, shell, windowsHide: true, env: process.env });
+    const child = spawn(cmd, args, { cwd, shell, windowsHide: true, env: process.env, stdio: ['ignore', 'pipe', 'pipe'] });
     let out = '';
     let err = '';
     const timer = setTimeout(() => {
       child.kill();
       err += `\n[zaman aşımı: ${timeout / 1000} sn]`;
     }, timeout);
+    signal?.addEventListener('abort', () => child.kill(), { once: true });
     child.stdout.on('data', (d) => (out += d.toString('utf8')));
     child.stderr.on('data', (d) => (err += d.toString('utf8')));
     child.on('error', (e) => {
@@ -91,6 +93,38 @@ async function webSearch(query) {
 
 function cliArgSafe(s) {
   return String(s).replace(/"/g, "'").replace(/%/g, ' yüzde ').replace(/\r?\n/g, ' ');
+}
+
+async function runCli(name, prompt, { cwd, extraArgs = [], timeout = 10 * 60 * 1000, signal } = {}) {
+  const c = config.get().clis[name];
+  if (!c) return { code: -1, out: '', err: `Tanımsız CLI: ${name}. Tanımlı olanlar: ${Object.keys(config.get().clis).join(', ')}` };
+  const found = await which(c.cmd);
+  if (!found) return { code: -1, out: '', err: `${c.cmd} bu bilgisayarda bulunamadı.` };
+  // .cmd/.ps1 sarmalayıcılar kabuk ister; gerçek .exe ise argümanlar kabuğa uğramadan olduğu gibi gider.
+  const shell = isWin && !/\.exe$/i.test(found);
+  const args = [...c.args, ...extraArgs].map((a) => a.replace('{prompt}', shell ? `"${cliArgSafe(prompt)}"` : prompt));
+  return runProcess(shell ? c.cmd : found, args, { cwd, timeout, shell, signal });
+}
+
+const SELF_EDIT_CLIS = {
+  claude: ['--permission-mode', 'acceptEdits'],
+  opencode: [],
+  gemini: ['--approval-mode', 'auto_edit'],
+};
+
+function selfEditPrompt(task, mode) {
+  return [
+    `You are editing the source code of the V.A.U.L.T. / B.R.E.A.C.H. app itself (the user is talking to ${mode === 'breach' ? 'B.R.E.A.C.H.' : 'V.A.U.L.T.'}). ` +
+      'It is a local Node.js agent web app without npm dependencies: server/ = backend (agent loop, tools, router), web/ = UI, skills/ = skill files. It is running now and will be restarted after your edit.',
+    'Rules:',
+    '- Make the smallest change that fulfils the task. Keep the existing code style, Turkish UI texts and the low comment density.',
+    '- Never read, print, modify or copy config.json or any API key/token. Never write secrets to files, Google Drive or git.',
+    '- Do not remove or weaken the approval mechanism (tool risk levels, requestApproval, /api/approve, autoApprove handling, server/selfedit.js safety checks).',
+    '- Do not run git commit, push, reset, checkout or stash. Do not start or stop the server.',
+    '- When finished, reply in Turkish with a short list of the files you changed and what you changed.',
+    '',
+    `Task from the user: ${task}`,
+  ].join('\n');
 }
 
 const TOOLS = [
@@ -263,14 +297,40 @@ const TOOLS = [
       },
       required: ['cli', 'prompt'],
     },
-    run: async ({ cli, prompt, cwd }) => {
-      const c = config.get().clis[cli];
-      if (!c) return `Tanımsız CLI: ${cli}. Tanımlı olanlar: ${Object.keys(config.get().clis).join(', ')}`;
-      const found = await which(c.cmd);
-      if (!found) return `${c.cmd} bu bilgisayarda bulunamadı.`;
-      const args = c.args.map((a) => a.replace('{prompt}', isWin ? `"${cliArgSafe(prompt)}"` : prompt));
-      const r = await runProcess(c.cmd, args, { cwd: expandPath(cwd), timeout: 10 * 60 * 1000, shell: isWin });
-      return fmtProc(r);
+    run: async ({ cli, prompt, cwd }, ctx) => {
+      const r = await runCli(cli, prompt, { cwd: expandPath(cwd), signal: ctx?.signal });
+      return r.code === -1 && !r.out ? r.err : fmtProc(r);
+    },
+  },
+  {
+    name: 'self_update',
+    risk: 'always',
+    description:
+      "Uygulamanın (V.A.U.L.T./B.R.E.A.C.H.) KENDİ kaynak kodunu değiştirir: kullanıcı 'kendine X ekle', 'kendini güncelle', 'kodunu değiştir' dediğinde kullan. " +
+      'Görevi proje klasöründe bir kodlama CLI\'ına (claude, yoksa opencode/gemini) verir; öncesinde yedek alır, sonrasında kontrol eder, bozulursa geri yükler, gerekirse sunucuyu yeniden başlatır. Her zaman kullanıcı onayı ister.',
+    parameters: {
+      type: 'object',
+      properties: {
+        task: { type: 'string', description: 'Yapılacak değişikliğin açık tarifi (kullanıcının isteği)' },
+        cli: { type: 'string', enum: Object.keys(SELF_EDIT_CLIS), description: 'Opsiyonel; boşsa kurulu olan ilk CLI' },
+      },
+      required: ['task'],
+    },
+    run: async ({ task, cli }, ctx = {}) => {
+      if (ctx.headless) return 'Hata: Kendi kodunu değiştirme yalnızca arayüzden, kullanıcı onayıyla yapılabilir; uzaktan/köprü isteği reddedildi.';
+      if (!String(task || '').trim()) return 'Hata: görev boş.';
+      const order = cli && SELF_EDIT_CLIS[cli] ? [cli] : Object.keys(SELF_EDIT_CLIS);
+      const clis = [];
+      for (const name of order) {
+        const c = config.get().clis[name];
+        if (!c || !(await which(c.cmd))) continue;
+        clis.push({
+          name,
+          run: (t) => runCli(name, selfEditPrompt(t, ctx.mode), { cwd: config.ROOT, extraArgs: SELF_EDIT_CLIS[name], timeout: 15 * 60 * 1000, signal: ctx.signal }),
+        });
+      }
+      if (!clis.length) return `Hata: Kodlama CLI'ı bulunamadı (${order.join(', ')}).`;
+      return selfedit.apply(String(task).trim(), clis);
     },
   },
 ];

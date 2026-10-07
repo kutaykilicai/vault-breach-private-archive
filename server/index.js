@@ -6,6 +6,7 @@ const memory = require('./memory');
 const providers = require('./providers');
 const agent = require('./agent');
 const bridge = require('./bridge');
+const selfedit = require('./selfedit');
 const { detectAll } = require('./detect');
 
 const WEB = path.join(config.ROOT, 'web');
@@ -114,6 +115,7 @@ async function handleChat(req, res) {
   } finally {
     emit('state', { state: 'idle' });
     res.end();
+    if (selfedit.restartPending()) setTimeout(selfedit.restart, 300);
   }
 }
 

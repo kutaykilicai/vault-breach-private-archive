@@ -121,6 +121,28 @@ function quickOpen(text) {
   return hit ? { label: hit.label, target: hit.target, done: `${hit.label} açıldı.` } : null;
 }
 
+const EDIT_VERB = '(?:g[uü]ncelle|geli[sş]tir|d[uü]zenle|de[gğ]i[sş]tir)';
+const SELF_EDIT = [
+  { re: /^\/(?:kendin|self)\s+(.+)$/su },
+  { re: new RegExp(`^kendini\\s+${EDIT_VERB}(?:\\s*[:,\\-–]\\s*|\\s+)(.+)$`, 'su') },
+  { re: new RegExp(`^(?:kendi\\s+)?kodunu\\s+${EDIT_VERB}(?:\\s*[:,\\-–]\\s*|\\s+)(.+)$`, 'su') },
+  { re: /^kendine\s+.+\s(?:ekle|eklesene|ekleyin|ekler\s+misin|ekleyebilir\s+misin|ekleyiver)[.!?\s]*$/su, whole: true },
+];
+
+/** "kendine X ekle", "kendini güncelle: X", "kodunu değiştir X", "/kendin X" → görev metni | null */
+function selfEditTask(text) {
+  const s = text.trim().replace(/^(?:lütfen|lutfen)[,\s]+/iu, '');
+  const lower = s.toLocaleLowerCase('tr-TR');
+  const src = lower.length === s.length ? s : lower;
+  for (const { re, whole } of SELF_EDIT) {
+    const m = re.exec(lower);
+    if (!m) continue;
+    const task = whole ? src : src.slice(m.index + m[0].length - m[1].length);
+    if (task.trim()) return task.trim();
+  }
+  return null;
+}
+
 const JEV_QUESTION = {
   instructions:
     'A personal AI assistant running on the user\'s own PC received this request. Which handling tier does it need?',
@@ -192,6 +214,8 @@ async function classify(text, forced, mode) {
   const done = (r) => ({ source: 'yerel', ...r, ms: Number(process.hrtime.bigint() - t0) / 1e6, credits: lastCredits });
 
   const s = (text || '').trim();
+  const selfTask = selfEditTask(s);
+  if (selfTask) return done({ tier: 1, source: 'kural', reason: 'kendini güncelleme komutu', action: { tool: 'self_update', args: { task: selfTask } } });
   const rule = TIER1.find((r) => r.test.test(s));
   const quick = rule ? null : quickOpen(s);
   const quickRoute = (reason) =>
@@ -225,4 +249,4 @@ heuristic('ısınma: dosya aç');
 TIER1.forEach((r) => r.test.test('ısınma'));
 quickOpen("youtube'da ısınma ara");
 
-module.exports = { classify, jevUsage, quickOpen };
+module.exports = { classify, jevUsage, quickOpen, selfEditTask };

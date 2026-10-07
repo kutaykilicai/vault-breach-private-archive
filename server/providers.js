@@ -57,6 +57,18 @@ async function resolveModel(name, model) {
  */
 const NETWORK_ERR = /terminated|fetch failed|ECONNRESET|ETIMEDOUT|EAI_AGAIN|socket|other side closed/i;
 
+function stripToolHistory(messages) {
+  const out = messages
+    .filter((m) => m.role !== 'tool')
+    .map((m) => (m.tool_calls ? { role: m.role, content: m.content || '' } : m))
+    .filter((m) => m.role !== 'assistant' || m.content);
+  const note = 'ÖNEMLİ: Bu model araç çağıramıyor. Bilgisayarda komut çalıştıramaz, dosya okuyamaz/listeleyemezsin. Yapmış gibi davranma ve hafızadaki eski kayıtları güncel sonuç gibi sunma; gerekiyorsa kullanıcıya bunun için araç destekli bir motor gerektiğini söyle.';
+  const i = out.findIndex((m) => m.role === 'system');
+  if (i >= 0) out[i] = { ...out[i], content: `${out[i].content}\n\n${note}` };
+  else out.unshift({ role: 'system', content: note });
+  return out;
+}
+
 async function streamChat(opts) {
   let received = false;
   const onDelta = (d) => {
@@ -97,6 +109,9 @@ async function streamOnce({ provider, model, messages, tools, signal, onDelta, t
   });
   if (!res.ok) {
     const txt = await res.text().catch(() => '');
+    if (body.tools && (res.status === 404 || res.status === 400) && /support tool|tool use|tools? (is|are) not supported|does not support tools/i.test(txt)) {
+      return streamOnce({ provider, model: body.model, messages: stripToolHistory(messages), tools: null, signal, onDelta, temperature });
+    }
     throw new Error(`${provider} HTTP ${res.status}: ${txt.slice(0, 400)}`);
   }
 
